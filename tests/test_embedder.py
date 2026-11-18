@@ -1,5 +1,12 @@
-from nxopen_mcp_enhanced.indexer.embedder import record_to_text
+from nxopen_mcp_enhanced.indexer.embedder import LlamaEmbedder, record_to_text
 from nxopen_mcp_enhanced.indexer.parser import MemberRecord
+
+
+def test_llama_embedder_accepts_base_url_and_v1_url():
+    base = LlamaEmbedder(url="https://api.example.com/")
+    assert base._embeddings_url == "https://api.example.com/v1/embeddings"
+    with_v1 = LlamaEmbedder(url="https://api.example.com/v1")
+    assert with_v1._embeddings_url == "https://api.example.com/v1/embeddings"
 
 
 def test_record_to_text_contains_key_fields():

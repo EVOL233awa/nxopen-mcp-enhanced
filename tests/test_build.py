@@ -22,6 +22,15 @@ def test_find_doc_xmls_in_ugii_managed(tmp_path):
     assert {p.name for p in found} == {"NXOpen.xml", "NXOpenUI.xml"}
 
 
+def test_find_doc_xmls_in_nxbin_managed(tmp_path):
+    # NX12 layout: docs and DLLs live under NXBIN\managed, not UGII\managed.
+    managed = tmp_path / "NXBIN" / "managed"
+    managed.mkdir(parents=True)
+    (managed / "NXOpen.xml").write_text("<doc/>")
+    found = find_doc_xmls(tmp_path)
+    assert [p.name for p in found] == ["NXOpen.xml"]
+
+
 def test_build_index_populates_all_tables(tmp_path):
     db = tmp_path / "index.db"
     n = build_index([FIXTURE], db, FakeEmbedder(), on_progress=lambda _: None)

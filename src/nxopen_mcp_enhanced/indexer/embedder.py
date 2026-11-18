@@ -94,6 +94,10 @@ class LlamaEmbedder:
         import os
         import urllib.request
         self._url = url.rstrip("/")
+        # Accept both a bare base URL and one that already ends in /v1.
+        self._embeddings_url = (
+            f"{self._url}/embeddings" if self._url.endswith("/v1")
+            else f"{self._url}/v1/embeddings")
         self._model = model
         self._batch_size = batch_size
         self._max_chars = max_chars
@@ -115,18 +119,18 @@ class LlamaEmbedder:
         payload = json.dumps(
             {"model": self._model, "input": texts}).encode("utf-8")
         req = urllib.request.Request(
-            f"{self._url}/v1/embeddings", data=payload, method="POST")
+            self._embeddings_url, data=payload, method="POST")
         try:
             with self._opener.open(req, timeout=self._timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             raise RuntimeError(
-                f"llama-server /v1/embeddings failed ({exc.code}): "
+                f"embedding service /v1/embeddings failed ({exc.code}): "
                 f"{exc.read().decode('utf-8', 'replace')}") from exc
         emb = [item.get("embedding") for item in data.get("data") or []]
         if not emb or len(emb) != len(texts):
             raise RuntimeError(
-                f"llama-server returned {len(emb)} embeddings for "
+                f"embedding service returned {len(emb)} embeddings for "
                 f"{len(texts)} inputs")
         return emb
 
@@ -155,6 +159,9 @@ class LazyEmbedder:
         self._factory = factory
         self._real: Embedder | None = None
         self._lock = threading.Lock()
+        # Tool calls now run in worker threads; the local BGE-M3 model is not
+        # safe to encode from several threads at once.
+        self._encode_lock = threading.Lock()
 
     def _ensure_loaded(self) -> None:
         with self._lock:
@@ -169,7 +176,8 @@ class LazyEmbedder:
 
     def encode(self, texts: list[str]) -> tuple[np.ndarray, list[dict[str, float]]]:
         self._ensure_loaded()
-        return self._real.encode(texts)
+        with self._encode_lock:
+            return self._real.encode(texts)
 
 
 class BGEM3Embedder:

@@ -22,8 +22,15 @@ def serialize_f32(vec) -> bytes:
 
 
 def find_doc_xmls(nx_path: Path) -> list[Path]:
-    """Locate NXOpen*.xml under an NX install dir (or a direct folder)."""
-    for cand in (nx_path / "UGII" / "managed", nx_path):
+    """Locate NXOpen*.xml under an NX install dir (or a direct folder).
+
+    NX12 ships the docs in NXBIN\\managed; older layouts used UGII\\managed.
+    Missing NXBIN\\managed made `index --nx-path <NX root>` fail on every
+    NX12 install even though the docs were present.
+    """
+    for cand in (nx_path / "UGII" / "managed",
+                 nx_path / "NXBIN" / "managed",
+                 nx_path):
         found = sorted(cand.glob("NXOpen*.xml"))
         if found:
             return found

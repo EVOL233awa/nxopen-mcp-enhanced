@@ -82,7 +82,10 @@ class Store:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.db_path))
+        # The MCP server runs tool bodies in worker threads so a slow
+        # embedding call cannot block exact lookups. SQLite is compiled
+        # serialized here, so one read-only connection may be shared.
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         load_vec_extension(self.conn)
 
@@ -124,6 +127,8 @@ class Store:
         self.conn.commit()
 
     def _find_one(self, name: str, kind: str | None = None) -> sqlite3.Row | None:
+        if not name.strip():  # LIKE '%%' would otherwise return a random row
+            return None
         kind_sql = " AND kind = ?" if kind else ""
         kp = [kind] if kind else []
         # Deterministic tie-breaks: shortest full_name first, then
@@ -185,6 +190,17 @@ class Store:
             "SELECT COUNT(*) FROM members WHERE name = ? OR full_name = ?",
             [text, text]).fetchone()
         return row[0] == 1
+
+    def exact_query_matches(self, text: str) -> list[int]:
+        """Whole-query exact lookup, including single-word and fully-qualified
+        names. Camel-token extraction matches neither ("Part", "Session",
+        "NXOpen.Features.ExtrudeBuilder"), so the offline fallback uses this
+        before it falls back to token matching."""
+        rows = self.conn.execute(
+            "SELECT id FROM members WHERE full_name = ? OR name = ? "
+            "ORDER BY (kind = 'T') DESC, length(full_name) LIMIT 3",
+            [text, text]).fetchall()
+        return [r["id"] for r in rows]
 
     def exact_name_matches(self, token: str) -> list[int]:
         # Name equality first, types before members, shortest name first —

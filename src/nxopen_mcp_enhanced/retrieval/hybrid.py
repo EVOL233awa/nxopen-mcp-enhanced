@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import urllib.request
 from collections import defaultdict
 
@@ -67,6 +68,26 @@ class HybridSearcher:
             ids.extend(self.store.exact_name_matches(tok))
         return ids
 
+    def exact_search(self, query: str, top_k: int = 10,
+                     namespace: str | None = None) -> list[dict]:
+        """Offline fallback: the whole query as a literal name first, then
+        CamelCase tokens found inside it. The whole-name step is what makes
+        single-word names (Part, Session, Tag) and fully-qualified names work
+        without an embedding service."""
+        ids: list[int] = []
+        whole = query.strip()
+        for mid in self.store.exact_query_matches(whole):
+            if mid not in ids:
+                ids.append(mid)
+        for tok in extract_camel_tokens(query):
+            for mid in self.store.exact_name_matches(tok):
+                if mid not in ids:
+                    ids.append(mid)
+        results = self.store.get_members_by_ids(ids)
+        if namespace:
+            results = [r for r in results if r["namespace"].startswith(namespace)]
+        return results[:top_k]
+
     def _skip_rerank(self, query: str) -> bool:
         """Only a unique exact name skips reranking. Ambiguous short names keep
         it: their top-5 changes completely under reranking and there is no
@@ -98,7 +119,8 @@ class HybridSearcher:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
         except Exception as exc:
-            print(f"[rerank] service unavailable, skipping: {exc}")
+            print(f"[rerank] service unavailable, skipping: {exc}",
+                  file=sys.stderr)
             return members
         results = data.get("results") or []
         order = [r["index"] for r in sorted(

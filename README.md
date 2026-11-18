@@ -101,9 +101,11 @@ Behavior:
   back to the unranked order on any error.
 - Unique exact names (`ExtrudeBuilder`) skip reranking; ambiguous short names
   (`Tag`, `Validate`) and natural-language queries keep it.
-- If the embedding service is unreachable, exact-name queries fall back to local
-  exact matches with a notice, other queries fail, and `get_class` / `get_member`
-  keep working.
+- If the embedding service is unreachable, the whole query is tried as a literal
+  name (`Part`, `Session`, `NXOpen.Features.ExtrudeBuilder`) and CamelCase tokens
+  inside it fall back to local exact matches, with a notice on the first line;
+  other queries fail. `get_class` / `get_member` never wait on the embedding
+  service and answer while a slow semantic call is in flight.
 
 If `nxopen-mcp-enhanced` isn't on your PATH (e.g. installed into a venv), use the
 full path to the executable (Windows: `<venv>\Scripts\nxopen-mcp-enhanced.exe`)
