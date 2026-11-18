@@ -28,7 +28,7 @@ dev = ["pytest>=8.0"]
 
 [project.urls]
 Upstream = "https://github.com/mingfeng6684/nxopen-mcp"
-Repository = "https://github.com/mingfeng6684/nxopen-mcp"
+Repository = "https://github.com/EVOL233awa/nxopen-mcp-enhanced"
 
 [project.scripts]
 nxopen-mcp-enhanced = "nxopen_mcp_enhanced.cli:app"
