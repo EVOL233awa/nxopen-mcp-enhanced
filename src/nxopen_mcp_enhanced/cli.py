@@ -1,0 +1,121 @@
+"""CLI entry points: nxopen-mcp-enhanced index / serve."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import typer
+
+app = typer.Typer(help="NXOpen MCP server - accurate NXOpen API for AI agents")
+
+DEFAULT_DB = Path.home() / ".nxopen-mcp-enhanced" / "index.db"
+
+
+def _make_embedder():
+    if os.environ.get("NXOPEN_MCP_FAKE_EMBEDDER"):
+        try:
+            from tests.fakes import FakeEmbedder  # test hook only
+            return FakeEmbedder()
+        except ImportError:
+            typer.echo("error: NXOPEN_MCP_FAKE_EMBEDDER is a dev-only hook; "
+                       "it requires the tests/ module. Unset the variable or "
+                       "use the installed source distribution.")
+            raise typer.Exit(1)
+    from nxopen_mcp_enhanced.indexer.embedder import (
+        BGEM3Embedder,
+        LlamaEmbedder,
+        OllamaEmbedder,
+    )
+    mode = os.environ.get("NXOPEN_MCP_EMBEDDER", "").lower()
+    if mode in ("ollama", "1"):
+        url = os.environ.get("NXOPEN_MCP_OLLAMA_URL", "http://127.0.0.1:11434")
+        model = os.environ.get("NXOPEN_MCP_OLLAMA_MODEL", "bge-m3")
+        batch = int(os.environ.get("NXOPEN_MCP_OLLAMA_BATCH", "128"))
+        typer.echo(f"using Ollama embedder ({url} / {model}) ...", err=True)
+        return OllamaEmbedder(url=url, model=model, batch_size=batch)
+    if mode in ("llama", "llama-server", "llamacpp", "openai", "remote"):
+        url = os.environ.get(
+            "NXOPEN_MCP_EMBED_URL",
+            os.environ.get("NXOPEN_MCP_OLLAMA_URL", "http://127.0.0.1:11436"))
+        model = os.environ.get(
+            "NXOPEN_MCP_EMBED_MODEL",
+            os.environ.get("NXOPEN_MCP_OLLAMA_MODEL", "bge-m3"))
+        batch = int(os.environ.get("NXOPEN_MCP_OLLAMA_BATCH", "128"))
+        typer.echo(f"using OpenAI-compatible embedder ({url} / {model}) ...",
+                   err=True)
+        return LlamaEmbedder(url=url, model=model, batch_size=batch)
+    typer.echo("loading BGE-M3 model (first run downloads ~2GB) ...", err=True)
+    return BGEM3Embedder()
+
+
+@app.command()
+def index(
+    nx_path: Path = typer.Option(..., help="NX install dir, e.g. D:\\Siemens\\NX12.0"),
+    db: Path = typer.Option(DEFAULT_DB, help="Index output path"),
+    workers: int = typer.Option(
+        1, min=1,
+        help="Parallel embedding worker processes. Each worker loads its own "
+             "model copy; on an 8-core CPU, 3 workers give ~3x throughput. "
+             "Interrupted parallel builds resume where they left off."),
+):
+    """Build the local index from your own NX installation's doc XMLs."""
+    from nxopen_mcp_enhanced.indexer.build import build_index, find_doc_xmls
+
+    xmls = find_doc_xmls(nx_path)
+    if not xmls:
+        typer.echo(f"error: no NXOpen*.xml found under {nx_path} "
+                   f"(looked in UGII\\managed and the dir itself)")
+        raise typer.Exit(1)
+    typer.echo(f"found: {', '.join(p.name for p in xmls)}")
+    dlls = sorted(xmls[0].parent.glob("NXOpen*.dll")) or None
+    if workers > 1:
+        # Workers each build their own embedder from the (picklable)
+        # module-level factory, so the parent never loads the model.
+        n = build_index(xmls, db, dll_paths=dlls, on_progress=typer.echo,
+                        workers=workers, embedder_factory=_make_embedder)
+    else:
+        n = build_index(xmls, db, _make_embedder(), dll_paths=dlls,
+                        on_progress=typer.echo)
+    typer.echo(f"done: indexed {n} members -> {db}")
+
+
+@app.command()
+def serve(
+    db: Path = typer.Option(DEFAULT_DB, help="Index path"),
+    preload: bool = typer.Option(
+        False, "--preload",
+        help="Warm the embedding model in the background at startup so the "
+             "first semantic query doesn't pay the load time"),
+):
+    """Start the MCP server (stdio). Requires a built index."""
+    if not db.exists():
+        typer.echo(f"error: index not found at {db}\n"
+                   f"Build it first:\n"
+                   f'  nxopen-mcp-enhanced index --nx-path "D:\\Siemens\\NX12.0"')
+        raise typer.Exit(1)
+    from nxopen_mcp_enhanced.indexer.build import load_vec_extension
+    from nxopen_mcp_enhanced.retrieval.hybrid import HybridSearcher
+    from nxopen_mcp_enhanced.retrieval.store import Store
+    from nxopen_mcp_enhanced.server import create_server
+
+    from nxopen_mcp_enhanced.indexer.embedder import LazyEmbedder
+    from nxopen_mcp_enhanced.retrieval.store import SchemaVersionError
+
+    store = Store(db)
+    try:
+        store.check_schema_version()
+    except SchemaVersionError as e:
+        typer.echo(f"error: {e}")
+        raise typer.Exit(1)
+    load_vec_extension(store.conn)
+    # Lazy: the MCP handshake answers instantly; BGE-M3 loads on the
+    # first semantic query (exact lookups never need it).
+    embedder = LazyEmbedder(_make_embedder)
+    if preload:
+        embedder.start_preload()
+    server = create_server(store, HybridSearcher(store, embedder))
+    server.run()  # stdio transport
+
+
+if __name__ == "__main__":
+    app()
