@@ -178,7 +178,7 @@ Add the same JSON block as `.mcp.json` above to Cursor's MCP settings
 | tool | purpose |
 |---|---|
 | `search_api` | Hybrid semantic search over the API (dense + exact-name by default, sparse optional). Accepts English or 中文 queries; use when you don't know the exact class/member name. |
-| `get_class` | Full member list for a class, including members inherited from its ancestor chain. Use when you know the class name. |
+| `get_class` | Member list for a class, including inherited members. Paginated: `offset` / `limit` (default 200), the footer shows the total and the next offset. Use when you know the class name. |
 | `get_member` | Exact signature, parameters, return value, NX version, and license requirement for one member. |
 | `find_builder` | Given a CAM operation name (e.g. "cavity milling", "hole drilling"), finds the matching `*Builder` class, its creator method, and a Builder → Commit → Destroy code skeleton. |
 

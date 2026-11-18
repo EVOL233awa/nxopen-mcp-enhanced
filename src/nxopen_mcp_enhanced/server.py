@@ -88,22 +88,49 @@ def create_server(store: Store, searcher: HybridSearcher) -> FastMCP:
             return "top_k must be >= 1."
         return await asyncio.to_thread(_search_api, query, namespace, top_k)
 
-    def _get_class(class_name: str) -> str:
+    def _get_class(class_name: str, offset: int, limit: int) -> str:
         c = store.get_class(class_name)
         if not c:
             return f"Class '{class_name}' not found. Try search_api instead."
-        out = [format_member(c["type"]), "", "## Members"]
-        out += [_member_line(m) for m in c["members"]] or ["(none)"]
+        if offset < 0 or limit < 1:
+            return "offset must be >= 0 and limit must be >= 1."
+        sections: list[tuple[str, dict]] = [
+            ("## Members", m) for m in c["members"]]
         if c["ancestors"]:
-            out.append(f"\n## Inherited (from {' -> '.join(c['ancestors'])})")
-            out += [_member_line(m) for m in c["inherited_members"]]
+            inherited = (f"\n## Inherited "
+                         f"(from {' -> '.join(c['ancestors'])})")
+            sections += [(inherited, m) for m in c["inherited_members"]]
+        total = len(sections)
+        out = [format_member(c["type"]), ""]
+        if not total:
+            out += ["## Members", "(none)"]
+            return "\n".join(out)
+        page = sections[offset:offset + limit]
+        if not page:
+            out.append(f"offset {offset} is past the end ({total} members).")
+            return "\n".join(out)
+        last_header = ""
+        for header, m in page:
+            if header != last_header:
+                out.append(header)
+                last_header = header
+            out.append(_member_line(m))
+        if total > offset + len(page):
+            out.append(f"\n(showing {offset + 1}-{offset + len(page)} "
+                       f"of {total}; pass offset={offset + len(page)} "
+                       f"to continue)")
+        elif offset:
+            out.append(f"\n(showing {offset + 1}-{offset + len(page)} "
+                       f"of {total})")
         return "\n".join(out)
 
     @mcp.tool()
-    async def get_class(class_name: str) -> str:
-        """List all members of an NXOpen class, including inherited members
-        from its ancestor chain. Use when you know the class name."""
-        return await asyncio.to_thread(_get_class, class_name)
+    async def get_class(class_name: str, offset: int = 0,
+                        limit: int = 200) -> str:
+        """List members of an NXOpen class, including inherited members from
+        its ancestor chain. Large classes are paginated: the footer shows the
+        total and the next offset."""
+        return await asyncio.to_thread(_get_class, class_name, offset, limit)
 
     def _get_member(member_name: str) -> str:
         m = store.get_member(member_name)

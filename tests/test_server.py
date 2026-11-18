@@ -86,6 +86,34 @@ def test_top_k_below_one_is_rejected(tools):
                                          top_k=0)
 
 
+def test_get_class_paginates_and_reports_total(tmp_path):
+    db = tmp_path / "index.db"
+    emb = FakeEmbedder()
+    build_index([FIXTURE], db, emb, on_progress=lambda _: None)
+    store = Store(db)
+    load_vec_extension(store.conn)
+    store.insert_members([
+        MemberRecord(full_name=f"NXOpen.CAM.CavityMillingBuilder.P{i}",
+                     kind="P", namespace="NXOpen.CAM",
+                     parent_type="NXOpen.CAM.CavityMillingBuilder",
+                     name=f"P{i}", summary="property")
+        for i in range(3)])
+    tools = _tool_map(store, HybridSearcher(store, emb))
+
+    first = _call(tools, "get_class", class_name="CavityMillingBuilder",
+                  limit=2)
+    assert "showing 1-2 of 4" in first
+    second = _call(tools, "get_class", class_name="CavityMillingBuilder",
+                   offset=2, limit=2)
+    assert "showing 3-4 of 4" in second
+    assert "to continue" not in second
+    assert "past the end" in _call(tools, "get_class",
+                                   class_name="CavityMillingBuilder", offset=9)
+    assert "limit must be >= 1" in _call(tools, "get_class",
+                                         class_name="CavityMillingBuilder",
+                                         limit=0)
+
+
 def test_offline_fallback_matches_single_word_name(tmp_path):
     """A bare class name has no CamelCase token, so only a whole-name lookup
     can serve it while the embedding service is down."""

@@ -137,7 +137,7 @@ codex mcp add nxopen -- nxopen-mcp-enhanced serve
 | 工具 | 用途 |
 |---|---|
 | `search_api` | API 混合語意搜尋(預設 dense + 精確名稱,sparse 可選)。支援中英文查詢;不知道確切類別/成員名稱時使用。 |
-| `get_class` | 列出類別的完整成員,**包含從祖先鏈繼承的成員**。已知類別名稱時使用。 |
+| `get_class` | 列出類別成員,包含從祖先鏈繼承的成員。支援 `offset` / `limit` 分頁(預設 200),尾行顯示總數與下一段 offset。已知類別名稱時使用。 |
 | `get_member` | 單一成員的精確簽名、參數、回傳值、NX 版本與授權需求。 |
 | `find_builder` | 給定 CAM 操作名稱(如 "cavity milling"、"鑽孔"),找出對應的 `*Builder` 類別、其建立方法,以及 Builder → Commit → Destroy 程式骨架。 |
 
