@@ -336,6 +336,10 @@ Same index, same 73 queries, dense + exact, only the rerank switch flipped
 | Recall@10 | 67.12% | **78.08%** |
 | MRR | 0.437 | **0.530** |
 
+The rerank-off row is one query below the 58.90% dense+exact baseline in the
+table above — cloud vs. local encoding of the same weights jitters by that much;
+the direction of the comparison is unaffected.
+
 Per query: 11 improved, 2 got worse, 60 unchanged. Both regressions are
 "Chinese verb + English noun" queries (`取得零件的 CAM setup 物件`,
 `create hole feature 建立孔特徵`), where reranking down-weights the literal
