@@ -236,33 +236,43 @@ Recall@5 高 13.7 pt。远程嵌入不提供 sparse 词权重，因此表内不�
 
 ### 幻觉测试：闭卷 vs. 带工具
 
-同一模型（`deepseek-ai/DeepSeek-V4.1-Flash`）、同一组 33 条 golden 问题、temperature 0，
-唯一变量是四个工具能否通过 MCP 函数调用拿到。
+同一模型（`deepseek-ai/DeepSeek-V4.1-Flash`）、同一组 33 条 golden 问题、开启思考并置于模型
+最高强度（`enable_thinking: true`、`reasoning_effort: max`，即实际使用的设置），唯一变量是
+四个工具能否通过 MCP 函数调用拿到；temperature 0 只为可复现。
 
 判分是机械的，可复跑：答案里每个标识符（`NXOpen.*` 点路径，加上答案自己未声明的三段式以上
 驼峰名）都拿到 NXOpen 反射里核对——`NXOpen.dll`、`NXOpen.Utilities.dll`、`NXOpen.UF.dll`，
 接受 `类型.成员` 以及 `NXOpen.Session.Parts.Work.CAMSetup` 这类属性链。判据先自校准：
-13 个已知真实名必须被接受、6 个已知假名必须被拒绝，否则本次统计作废。只用 XML 文档索引做
-判据是错的——它漏掉了 `NXOpen.Session.GetSession` 这类真实成员。
+14 个已知真实名（含枚举值）必须被接受、7 个已知假名必须被拒绝，否则本次统计作废。只用 XML
+文档索引做判据是错的——它漏掉了 `NXOpen.Session.GetSession` 这类真实成员。
 
 ```bash
 python eval/halluc_test.py collect --out answers.jsonl   # 问模型
 python eval/halluc_test.py grade --answers answers.jsonl # 只用反射判分
 ```
 
+每题带工具阶段独立开 MCP 会话、最多 16 次工具调用。到达预算时模型仍在查——33 题里有 28 题——
+会再问一次并收回工具，让它写最终答案，所以判分拿到的永远是答案，而不是“我查一下”的开场白。
+
 | 指标 | 闭卷 | 带工具 |
 |---|:---:|:---:|
-| 提出的标识符总数 | 405 | 637 |
-| 其中不存在的标识符 | **177（43.7%）** | **23（3.6%）** |
-| 完全没编名字的答案 | 4/33 | **24/33** |
-| 点名正确类且全程无编造 | 4/33 | **16/33** |
-| 至少提到正确类 | 29/33 | 25/33 |
-| 33 题总耗时 | 311 s | 573 s |
+| 提出的标识符总数 | 403 | 1064 |
+| 其中不存在的标识符 | **160（39.7%）** | **27（2.5%）** |
+| 完全没编名字的答案 | 4/33 | **19/33** |
+| 点名正确类且全程无编造 | 4/33 | **19/33** |
+| 至少提到正确类 | 28/33 | **33/33** |
+| 完成 token（含思考） | 367k | 186k |
+| 33 题总耗时 | 3241 s | 1937 s |
 
-按标识符算，编造率降到 1/12；按题目算，无编造答案从 4 条升到 24 条。“至少提到正确类”反而
-下降是有原因的：闭卷答案是散文，常能点到正确的类名却把成员编错；带工具的答案是代码，直接用
-被查到的成员，较少复述类名。工具带来的是不再出现发明的名字——`MillGeometryBuilder`（真名
-`MillGeomBuilder`）、`CreateCavityMilling`、`NXOpen.CAM.CutMethod` 这类不再出现。
+按标识符算，编造率从 39.7% 降到 2.5%（约 1/16）；按题目算，无编造答案从 4 条升到 19 条。
+后者的提升没有按标识符那么夸张，是因为带工具的答案约长 1.7 倍（中位数 6.0k vs 3.6k 字符），
+可检查的名字更多。带工具的 33 条答案全部点名了正确类，闭卷是 28/33。工具真正消掉的是不存在
+的类：`NXOpen.CAM.CAMGroupCollection` / `NXOpen.CAM.CAMOperationCollection` 被当成类型（真实
+成员是 `CAMSetup.CAMGroupCollection` 与 `CAMSetup.CAMOperationCollection`，分别返回
+`NCGroupCollection` / `OperationCollection`），`NXOpen.CAM.BlankGeometry` 被当成类（它是返回
+`NXOpen.CAM.Geometry` 的属性），以及根本不存在的 `NXOpen.CAM.CutDepth` /
+`NXOpen.CAM.Stepover`。带工具后仍被计为编造的，多是枚举成员猜测与占位符
+（`CutPatternOptions.Follow`、`SomeOption`）。
 
 ## 演示
 

@@ -315,39 +315,54 @@ Two further effects matter in practice:
 ### Hallucination test: closed book vs. with the tools
 
 Same model (`deepseek-ai/DeepSeek-V4.1-Flash`), same 33 golden questions,
-temperature 0, one variable — whether the four tools are reachable over MCP
-function calling.
+thinking on at the model's maximum reasoning effort (`enable_thinking: true`,
+`reasoning_effort: max`) — the setting it is used with in practice — and one
+variable: whether the four tools are reachable over MCP function calling.
+Temperature is 0 only to make the run reproducible.
 
 Grading is mechanical, so it can be re-run: every identifier in an answer
 (`NXOpen.*` dotted paths, plus CamelCase tokens with 3+ humps that the answer
 does not declare itself) is checked against NXOpen reflection — `NXOpen.dll`,
 `NXOpen.Utilities.dll` and `NXOpen.UF.dll` — accepting `type.member` and
 property chains such as `NXOpen.Session.Parts.Work.CAMSetup`. The oracle is
-calibrated before grading: 13 known-real names must be accepted and 6 known-fake
-names rejected, or the run aborts. The XML-doc index alone would be the wrong
-oracle — it omits real members such as `NXOpen.Session.GetSession`.
+calibrated before grading: 14 known-real names (enum values included) must be
+accepted and 7 known-fake names rejected, or the run aborts. The XML-doc index
+alone would be the wrong oracle — it omits real members such as
+`NXOpen.Session.GetSession`.
 
 ```bash
 python eval/halluc_test.py collect --out answers.jsonl   # asks the model
 python eval/halluc_test.py grade --answers answers.jsonl # reflection only
 ```
 
+Each tool-assisted question gets its own MCP session and at most 16 tool calls.
+When the model is still querying at that budget — 28 of 33 questions — it is
+asked once more to write the final answer with the tools withheld, so the graded
+text is always an answer, never a "let me look that up" preamble.
+
 | metric | closed book | with the tools |
 |---|:---:|:---:|
-| identifiers proposed | 405 | 637 |
-| invented identifiers | **177 (43.7%)** | **23 (3.6%)** |
-| answers with no invented identifier | 4/33 | **24/33** |
-| expected class named without inventing anything | 4/33 | **16/33** |
-| expected class mentioned at all | 29/33 | 25/33 |
-| total time for 33 answers | 311 s | 573 s |
+| identifiers proposed | 403 | 1064 |
+| invented identifiers | **160 (39.7%)** | **27 (2.5%)** |
+| answers with no invented identifier | 4/33 | **19/33** |
+| expected class named without inventing anything | 4/33 | **19/33** |
+| expected class mentioned at all | 28/33 | **33/33** |
+| completion tokens (reasoning included) | 367k | 186k |
+| total time for 33 answers | 3,241 s | 1,937 s |
 
-Inventing an API drops 12x per identifier and 6x per answer. The "mentioned at
-all" row moves the other way on purpose: closed-book answers are prose that
-often names the right class while inventing its members, whereas tool-assisted
-answers are code that uses the queried member and spends fewer words naming the
-class. What the tools buy is not verbosity but the absence of invented names —
-`MillGeometryBuilder` (real: `MillGeomBuilder`), `CreateCavityMilling`,
-`NXOpen.CAM.CutMethod` and friends stop appearing.
+The invented rate per identifier drops from 39.7% to 2.5% (1 in 40). The
+per-answer count moves less — 19/33 tool answers invent nothing vs 4/33 —
+because tool-assisted answers are about 1.7x longer (median 6.0k vs 3.6k
+characters), so they expose more names to check. All 33 tool answers name the
+expected class, against 28/33 closed book. What the tools buy is the absence of
+invented classes: `NXOpen.CAM.CAMGroupCollection` and
+`NXOpen.CAM.CAMOperationCollection` written as types (the real members are
+`CAMSetup.CAMGroupCollection` and `CAMSetup.CAMOperationCollection`, returning
+`NCGroupCollection` / `OperationCollection`), `NXOpen.CAM.BlankGeometry`
+written as a class (it is a property returning `NXOpen.CAM.Geometry`), and
+`NXOpen.CAM.CutDepth` / `NXOpen.CAM.Stepover`, which do not exist as types. The
+few names still invented with tools are mostly enum-member guesses and
+fill-in placeholders (`CutPatternOptions.Follow`, `SomeOption`).
 
 ## Demo
 
