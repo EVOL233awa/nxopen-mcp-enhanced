@@ -1,4 +1,10 @@
-"""Retrieval evaluation: Recall@k / MRR across channel configs."""
+"""Retrieval evaluation: Recall@k / MRR across channel configs.
+
+Reranking follows NXOPEN_MCP_RERANK like the server does: set it to 1 to have
+the reranker applied to every config, leave it unset for the un-reranked rows.
+A remote embedder returns no sparse weights, so the sparse rows are only
+meaningful with the local BGE-M3 model.
+"""
 from __future__ import annotations
 
 import argparse
@@ -8,7 +14,7 @@ from pathlib import Path
 CONFIGS = {
     "dense-only": {"dense"},
     "sparse-only": {"sparse"},
-    "dense+exact (default)": {"dense", "exact"},
+    "dense+exact": {"dense", "exact"},
     "dense+sparse+exact": {"dense", "sparse", "exact"},
 }
 
@@ -46,7 +52,8 @@ def main() -> None:
     load_vec_extension(store.conn)
     searcher = HybridSearcher(store, _make_embedder())
 
-    print(f"{'config':<24}{'Recall@5':>10}{'Recall@10':>11}{'MRR':>8}")
+    print(f"{'config':<24}{'Recall@5':>10}{'Recall@10':>11}{'MRR':>8}"
+          f"   rerank={'on' if searcher.rerank_url else 'off'}")
     for name, chans in CONFIGS.items():
         m = evaluate(searcher, golden, chans)
         print(f"{name:<24}{m['recall@5']:>10.2%}{m['recall@10']:>11.2%}"

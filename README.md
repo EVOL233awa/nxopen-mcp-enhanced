@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-> **Our enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)
+> **Enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)
 > and the MCP component of
 > [nxopen-journal-toolkit](https://github.com/EVOL233awa/nxopen-journal-toolkit).
 
@@ -38,13 +38,13 @@ automation) with sparse public training data, so models confidently invent
 classes, methods, and parameters that don't exist. This server grounds
 agents in the real docs instead of guesses:
 
-- **Semantic search** (BGE-M3 dense + sparse embeddings) so natural-language
+- **Semantic search** (BGE-M3 embeddings) so natural-language
   queries in English or 中文 find the right API even without exact names.
 - **Exact-name channel**: a literal CamelCase name in your query (e.g.
   `CavityMillingBuilder`) is looked up directly and pinned to the top
   (types first) — never left to approximate matching.
-- **RRF fusion** available to combine channels — though evaluation made
-  dense + exact the default (see [Evaluation](#evaluation)).
+- **Optional reranking** of the top candidates, which is what the evaluation
+  recommends (see [Evaluation](#evaluation)).
 
 The default is fully local and offline against an index built from your own
 licensed NX installation — no Siemens files are bundled or sent anywhere. The
@@ -89,21 +89,17 @@ model on first use) — needed only for the local embedding path.
 members; skip it and indexing still works, just without inheritance
 chains.
 
-**How long does indexing take?** Honest numbers: a full NX 12 doc set is
-~100k members; on an 8-core laptop CPU that's **several hours** of local
-embedding (memory-bandwidth-bound — `--workers N` helps mainly on
-machines with more memory channels; a CUDA GPU helps a lot). Plan to run
-it overnight, or copy a teammate's index (see
-[Sharing a pre-built index](#sharing-a-pre-built-index)). With a remote
-embedding service the wall time follows the provider's rate limit;
+**How long does indexing take?** A full NX 12 doc set is ~100k members. Local
+embedding is memory-bandwidth-bound, so it takes hours; `--workers N` helps
+mostly on machines with more memory channels, and a CUDA GPU helps a lot. With
+a remote embedding service the wall time follows the provider's rate limit and
 `--workers N` submits batches concurrently.
 
 **First semantic query is slow by design (local path).** `serve` starts instantly, and
 `get_class` / `get_member` respond immediately, but the first
-`search_api` / `find_builder` call loads the BGE-M3 model (~1–2 min).
-After that, semantic queries take seconds. If your MCP client shows the
-first search "hanging", it's the one-time model load — let it finish.
-The remote path has no load step: ~1 s per semantic query.
+`search_api` / `find_builder` call loads the BGE-M3 model. After that, semantic
+queries take seconds. If your MCP client shows the first search "hanging", it's
+the one-time model load — let it finish. The remote path has no load step.
 
 By default the index is written to `~/.nxopen-mcp-enhanced/index.db`; override with
 `--db <path>` on both `index` and `serve`.
@@ -208,7 +204,7 @@ codex mcp add nxopen -- nxopen-mcp-enhanced serve
 
 Restart Codex, then verify with `codex mcp list` (or just ask it to look
 up an NXOpen class — you'll see the `nxopen` tool calls). On the local
-embedding path the same first-semantic-query model load (~1–2 min) applies here.
+embedding path the same first-semantic-query model load applies here.
 
 ### Cursor
 
@@ -242,7 +238,7 @@ NXOpen*.xml / *.dll  (your NX install)
         ▼
   retrieval/store.py       exact-name lookup, class/member/inheritance queries
   retrieval/hybrid.py      dense ANN + exact CamelCase match (default),
-                           optional sparse channel, RRF fusion
+                           optional sparse channel, RRF fusion, optional rerank
         │
         ▼
   server.py                4 MCP tools (FastMCP, stdio transport)
@@ -276,7 +272,7 @@ Design decisions:
 
 ## Evaluation
 
-Measured on a real index built from an NX 12 installation (97,913 API
+Measured on a real index built from an NX 12 installation (95,807 API
 members) against a 73-query golden set (`eval/golden.jsonl`, mixed
 English / Traditional Chinese, four query styles — semantic description,
 exact class name, member lookup, builder idiom — spanning CAM, Features,
@@ -286,64 +282,27 @@ Sketch, Assemblies, Drawings, UF, and BlockStyler):
 python eval/run_eval.py --db ~/.nxopen-mcp-enhanced/index.db
 ```
 
+Remote `BAAI/bge-m3` embeddings + `BAAI/bge-reranker-v2-m3` reranking, same index,
+same queries:
+
 | config | Recall@5 | Recall@10 | MRR |
 |---|---|---|---|
-| dense-only | 58.90% | 68.49% | 0.420 |
-| sparse-only | 34.25% | 38.36% | 0.193 |
-| **dense+exact (default)** | **58.90%** | **68.49%** | **0.445** |
-| dense+sparse+exact | 49.32% | 61.64% | 0.409 |
+| dense-only | 56.16% | 67.12% | 0.411 |
+| **dense+exact** | 57.53% | 67.12% | 0.437 |
+| **dense+exact+rerank (recommended)** | **69.86%** | **78.08%** | **0.531** |
 
-### With vs. without the tool: hallucination test
+The exact-name channel guarantees that a literal class/member name is surfaced,
+and reranking reorders the first 20 candidates; together they lift Recall@5 by
+13.7 pt over dense alone. The remote embedder returns no sparse lexical weights,
+so there is no sparse row here; the local BGE-M3 path can still enable that
+channel via the `channels` parameter of `search()`.
 
-Same model (Claude Haiku), the original 33 golden questions, one
-variable — whether the nxopen-mcp-enhanced tools are available. Answers were graded against the golden
-set; "hallucinated" means the proposed member does not exist anywhere in
-the real 97,913-member index:
+Per query, reranking improved 11, worsened 2, left 60 unchanged. Both
+regressions are "Chinese verb + English noun" queries (`取得零件的 CAM setup
+物件`, `create hole feature 建立孔特徵`), where reranking down-weights the literal
+API name.
 
-| metric | closed-book (no tool) | with nxopen-mcp-enhanced |
-|---|:---:|:---:|
-| exactly correct | 13/33 (39.4%) | **31/33 (93.9%)** |
-| wrong but real API | 13/33 (39.4%) | 2/33 (6.1%) |
-| **hallucinated (API does not exist)** | **7/33 (21.2%)** | **0/33 (0%)** |
-| time to answer all 33 | 84 s | 321 s (44 tool calls) |
-
-The closed-book hallucinations are the dangerous kind — plausible names
-like `NXOpen.CAM.MillGeometryBuilder` (real name: `MillGeomBuilder`) or
-`NXOpen.Session.Parts.Open` (real: `NXOpen.PartCollection.Open`) that
-read fine and fail at compile time. Tool-assisted answering costs ~7 s
-per question and eliminated hallucinations entirely.
-
-**Evaluation-driven default.** The original design fused dense, sparse
-and exact-name channels with uniform RRF. Measurement showed BGE-M3's
-sparse channel *hurt* on this corpus — on the initial 33-query set a
-weight sweep (w_sparse ∈ {0.5, 0.3, 0.15}) never recovered the
-dense-only baseline, and expanding the golden set to 73 queries
-replicated the finding (Recall@5 58.9% → 49.3% when sparse is fused).
-The exact-name channel — after reordering its matches (types first,
-shortest name first, capped at 3) — matches dense recall while
-*improving* MRR (0.420 → 0.445) and guaranteeing literal-name hits. The
-default is therefore **dense + exact**; the sparse channel remains
-available via the `channels` parameter of `search()`.
-
-### Reranking pays off
-
-Same index, same 73 queries, dense + exact, only the rerank switch flipped
-(`bge-reranker-v2-m3` over the first 20 candidates, ~0.4 s per query):
-
-| metric | rerank off | rerank on |
-|---|:---:|:---:|
-| Recall@5 | 57.53% | **69.86%** |
-| Recall@10 | 67.12% | **78.08%** |
-| MRR | 0.437 | **0.530** |
-
-The rerank-off row is one query below the 58.90% dense+exact baseline in the
-table above — cloud vs. local encoding of the same weights jitters by that much;
-the direction of the comparison is unaffected.
-
-Per query: 11 improved, 2 got worse, 60 unchanged. Both regressions are
-"Chinese verb + English noun" queries (`取得零件的 CAM setup 物件`,
-`create hole feature 建立孔特徵`), where reranking down-weights the literal
-API name. Two further effects matter in practice:
+Two further effects matter in practice:
 
 - The index does **not** need rebuilding when switching between local BGE-M3
   and the same model served remotely: the vectors agree to cosine 0.99988–0.99994,
@@ -352,6 +311,43 @@ API name. Two further effects matter in practice:
 - Plain 2–4 character Chinese queries with no English term still miss
   (`拉伸` returns `RelaxationLength`); add the English term
   (`创建拉伸特征 extrusion`) or use `get_class` / `get_member` by name.
+
+### Hallucination test: closed book vs. with the tools
+
+Same model (`deepseek-ai/DeepSeek-V4.1-Flash`), same 33 golden questions,
+temperature 0, one variable — whether the four tools are reachable over MCP
+function calling.
+
+Grading is mechanical, so it can be re-run: every identifier in an answer
+(`NXOpen.*` dotted paths, plus CamelCase tokens with 3+ humps that the answer
+does not declare itself) is checked against NXOpen reflection — `NXOpen.dll`,
+`NXOpen.Utilities.dll` and `NXOpen.UF.dll` — accepting `type.member` and
+property chains such as `NXOpen.Session.Parts.Work.CAMSetup`. The oracle is
+calibrated before grading: 13 known-real names must be accepted and 6 known-fake
+names rejected, or the run aborts. The XML-doc index alone would be the wrong
+oracle — it omits real members such as `NXOpen.Session.GetSession`.
+
+```bash
+python eval/halluc_test.py collect --out answers.jsonl   # asks the model
+python eval/halluc_test.py grade --answers answers.jsonl # reflection only
+```
+
+| metric | closed book | with the tools |
+|---|:---:|:---:|
+| identifiers proposed | 405 | 637 |
+| invented identifiers | **177 (43.7%)** | **23 (3.6%)** |
+| answers with no invented identifier | 4/33 | **24/33** |
+| expected class named without inventing anything | 4/33 | **16/33** |
+| expected class mentioned at all | 29/33 | 25/33 |
+| total time for 33 answers | 311 s | 573 s |
+
+Inventing an API drops 12x per identifier and 6x per answer. The "mentioned at
+all" row moves the other way on purpose: closed-book answers are prose that
+often names the right class while inventing its members, whereas tool-assisted
+answers are code that uses the queried member and spends fewer words naming the
+class. What the tools buy is not verbosity but the absence of invented names —
+`MillGeometryBuilder` (real: `MillGeomBuilder`), `CreateCavityMilling`,
+`NXOpen.CAM.CutMethod` and friends stop appearing.
 
 ## Demo
 
@@ -363,32 +359,13 @@ Claude Code calls `search_api` (semantic search, English or Chinese) and
 member — `FeedsBuilder`, `SpindleRpmToggle`, `SpindleRpmBuilder.Value` —
 exists in the real API, with NX version info to prove it.
 
-## Sharing a pre-built index
+## Index licensing
 
-The index is a single SQLite file (~500 MB for a full NX 12 doc set), so
-teammates can skip the hours-long build:
-
-1. Install nxopen-mcp-enhanced (the `[reflect]` extra is not needed — inheritance
-   chains are already baked into the index).
-2. Copy the index file to `~/.nxopen-mcp-enhanced/index.db` (or keep it elsewhere
-   and pass `--db <path>` to `serve`).
-3. Register the server: `claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve`
-
-Semantic search still needs an embedding backend: install `[embed]` for the local
-model, or configure SiliconFlow's free `BAAI/bge-m3` as described in
-[Remote embedding and reranking](#remote-embedding-and-reranking-recommended)
-(no model download). `get_class` / `get_member` read the index only and need no
-embedding backend at all.
-
-A full step-by-step onboarding guide (with troubleshooting):
-[docs/setup-prebuilt-index.md](docs/setup-prebuilt-index.md)
-([繁體中文版](docs/setup-prebuilt-index.zh-TW.md)).
-
-**Licensing boundary:** the index embeds text from Siemens' API
-documentation. Sharing it **within an organization whose seats are
-licensed for NX** is reasonable; do **not** redistribute index files
-publicly — anyone outside your license should build their own with
-`nxopen-mcp-enhanced index`.
+The index embeds text from Siemens' API documentation. Building it locally from
+your own licensed NX installation is what `nxopen-mcp-enhanced index` does; use
+such an index only within an organization whose seats are licensed for NX. Do
+**not** redistribute index files publicly — anyone outside your license should
+build their own.
 
 ## License & IP
 

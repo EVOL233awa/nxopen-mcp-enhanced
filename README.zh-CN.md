@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文**
 
-> **我们的增强 fork**：上游为 [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)，
+> **增强 fork**：上游为 [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)，
 > 同时是 [nxopen-journal-toolkit](https://github.com/EVOL233awa/nxopen-journal-toolkit) 的 MCP 组件。
 
 本 fork 可以**单独安装**（只做 NXOpen API 检索），但**推荐与
@@ -30,10 +30,10 @@ NXOpen API 事实，技能提供 NX 12 journal 配方、批处理入口与产物
 LLM 会编造 NXOpen API：这是西门子 NX CAM/CAD 自动化的窄领域，公开训练数据少，模型会自信地
 写出不存在的类、方法与参数。本 MCP 用你自己 NX 安装里的官方文档做检索，而不是靠记忆：
 
-- **语义检索**（BGE-M3 dense + sparse）：中英文自然语言查询也能找到 API。
+- **语义检索**（BGE-M3 dense 向量）：中英文自然语言查询也能找到 API。
 - **精确名通道**：查询里的 CamelCase 名字（如 `CavityMillingBuilder`）直接查库并置顶（类型优先），
   不交给近似匹配。
-- **RRF 融合** 可用；但评测后默认只走 dense + exact（见下文“评测”）。
+- **可选重排**：对前若干候选重新排序，评测显示这是更值得开的配置（见下文“评测”）。
 
 默认全程本地、离线，索引由本机授权的 NX 安装构建，不附带、不上传任何 Siemens 文件。推荐的
 部署再加一个外部嵌入/重排服务（见“远程嵌入与重排”），开启后只有查询与文档文本离开本机。
@@ -70,14 +70,12 @@ claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve
 可选依赖：`[embed]` 拉入 `FlagEmbedding`（约 2 GB 模型，只有本地嵌入路线才需要）；`[reflect]`
 拉入 `pythonnet`，`get_class` 才能显示继承链；不装也能建索引，只是没有继承成员。
 
-**建索引要多久？** 实测口径：NX 12 全量文档约 10 万成员；8 核笔记本 CPU 上本地嵌入需要数小时
-（受内存带宽限制，`--workers` 主要在内存通道多的机器上有收益；CUDA GPU 快很多）。建议过夜跑，
-或复制同事已建好的索引（见“共享索引”）。走远程嵌入时耗时取决于服务端限速与网络，可以按
-`--workers` 并发提交。
+**建索引要多久？** 全量 NX 12 文档约 10 万成员。本地嵌入受内存带宽限制，耗时以小时计；
+远程嵌入取决于服务端限速与网络，`--workers` 并发提交批次。
 
 **首次语义查询慢是设计行为（本地嵌入路线）。** `serve` 立即启动，`get_class` / `get_member`
-立即响应；第一次 `search_api` / `find_builder` 要加载 BGE-M3（约 1–2 分钟）。客户端看起来
-“卡住”时，等它加载完。远程嵌入路线没有这一步，每次查询约 1 s。
+立即响应；第一次 `search_api` / `find_builder` 要加载 BGE-M3。客户端看起来“卡住”时，等它
+加载完。远程嵌入路线没有这一步。
 
 默认索引在 `~/.nxopen-mcp-enhanced/index.db`；`index` 与 `serve` 都可用 `--db <path>` 覆盖。
 
@@ -112,7 +110,7 @@ claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve
   CamelCase token 回退本地精确匹配，并在首行标注；其他查询报错。`get_class` / `get_member`
   不等待嵌入服务，慢语义查询进行中也能回答。
 - 用 `nxopen-journal-toolkit` 时，`nxjt config embed --provider remote` 会把这些变量写进
-  ZCode MCP 配置，`nxjt index` 沿用同一组变量。
+  MCP 客户端配置（各宿主格式不同），`nxjt index` 沿用同一组变量。
 
 如果 `nxopen-mcp-enhanced` 不在 PATH（例如装在 venv），命令与配置里用完整可执行文件路径
 （Windows：`<venv>\Scripts\nxopen-mcp-enhanced.exe`）。
@@ -186,7 +184,7 @@ NXOpen*.xml / *.dll（你的 NX 安装）
         │                  单个 SQLite 文件（index.db）
         ▼
   retrieval/store.py       精确名查询、类/成员/继承查询
-  retrieval/hybrid.py      dense ANN + 精确 CamelCase（默认），可选 sparse，RRF 融合
+  retrieval/hybrid.py      dense ANN + 精确 CamelCase（默认），可选 sparse，RRF 融合，可选重排
         │
         ▼
   server.py                4 个 MCP 工具（FastMCP，stdio）
@@ -199,14 +197,14 @@ NXOpen*.xml / *.dll（你的 NX 安装）
   是本地 SQLite 文件，不上传、不入库。
 - **一成员一 chunk**：每条索引是一个 API 成员（类型/属性/方法/字段/事件），检索结果能 1:1
   对应到 agent 可执行的对象，而不是文档页的文本片段。
-- **RRF 而非分数混合**：开启 sparse 时用 Reciprocal Rank Fusion 合并排序，无需校准 dense 与
-  sparse 的分数量纲；默认配置只跑 dense + exact。精确名匹配直接提到融合列表之前。
+- **RRF 而非分数混合**：启用 sparse 通道时用 Reciprocal Rank Fusion 合并排序，无需校准
+  dense 与 sparse 的分数量纲；默认只跑 dense + exact，精确名匹配直接提到融合列表之前。
 - **继承靠反射，可降级**：`get_class` 的继承链在建索引时用 `pythonnet` 反射 DLL 得到
   （`[reflect]`）；没装或找不到 DLL 也能建索引，只是没有继承成员。
 
 ## 评测
 
-在真实 NX 12 索引（97,913 个 API 成员）与 73 条 golden query 上实测（`eval/golden.jsonl`，
+在真实 NX 12 索引（95,807 个 API 成员）与 73 条 golden query 上测（`eval/golden.jsonl`，
 英文/繁体中文混合，四种查询类型：语义描述、精确类名、成员查找、builder 惯用法；覆盖 CAM、
 Features、Sketch、Assemblies、Drawings、UF、BlockStyler）：
 
@@ -214,57 +212,57 @@ Features、Sketch、Assemblies、Drawings、UF、BlockStyler）：
 python eval/run_eval.py --db ~/.nxopen-mcp-enhanced/index.db
 ```
 
+远程 `BAAI/bge-m3` 嵌入 + `BAAI/bge-reranker-v2-m3` 重排，同一索引、同一批查询：
+
 | 配置 | Recall@5 | Recall@10 | MRR |
 |---|---|---|---|
-| dense-only | 58.90% | 68.49% | 0.420 |
-| sparse-only | 34.25% | 38.36% | 0.193 |
-| **dense+exact（默认）** | **58.90%** | **68.49%** | **0.445** |
-| dense+sparse+exact | 49.32% | 61.64% | 0.409 |
+| dense-only | 56.16% | 67.12% | 0.411 |
+| **dense+exact** | 57.53% | 67.12% | 0.437 |
+| **dense+exact+rerank（推荐）** | **69.86%** | **78.08%** | **0.531** |
 
-### 有工具 vs 无工具：幻觉测试
+精确名通道保证字面类名/成员名命中，重排把前 20 个候选重新排序；两者叠加比纯 dense 的
+Recall@5 高 13.7 pt。远程嵌入不提供 sparse 词权重，因此表内不含 sparse 行；本地 BGE-M3
+路线可用 `search()` 的 `channels` 参数启用。
 
-同一模型（Claude Haiku）、同一组 33 条 golden 问题，唯一变量是是否提供本 MCP 工具；答案按
-golden 集判分，“幻觉”指提出的成员在真实 97,913 条索引里不存在：
+逐查询：重排改善 11、变差 2、不变 60。两条变差的都是“中文动词 + 英文名词”结构
+（`取得零件的 CAM setup 物件`、`create hole feature 建立孔特徵`），重排压低了 API 字面名的分量。
 
-| 指标 | 闭卷（无工具） | 使用 nxopen-mcp-enhanced |
-|---|:---:|:---:|
-| 完全正确 | 13/33 (39.4%) | **31/33 (93.9%)** |
-| 错误但 API 真实存在 | 13/33 (39.4%) | 2/33 (6.1%) |
-| **幻觉（API 不存在）** | **7/33 (21.2%)** | **0/33 (0%)** |
-| 33 题总耗时 | 84 s | 321 s（44 次工具调用） |
-
-闭卷幻觉是最危险的一类：`NXOpen.CAM.MillGeometryBuilder`（真名 `MillGeomBuilder`）、
-`NXOpen.Session.Parts.Open`（真名 `NXOpen.PartCollection.Open`）这类名字读起来很合理，编译
-才报错。带工具后每题约 7 s，幻觉归零。
-
-**评测驱动的默认值。** 早期设计用 uniform RRF 融合 dense、sparse 与精确名；实测 BGE-M3 的
-sparse 通道在该语料上拖后腿——33 条查询上做权重扫描（w_sparse ∈ {0.5, 0.3, 0.15}）都没回到
-dense-only 基线；扩到 73 条后复现（Recall@5 58.9% → 49.3%）。精确名通道按“类型优先、短名优先、
-最多 3 条”重排后，dense recall 相同而 MRR 提升（0.420 → 0.445），并保证字面名命中。默认因此为
-**dense + exact**；sparse 仍可通过 `search()` 的 `channels` 参数启用。
-
-### 重排的收益
-
-同一索引、同一 73 条查询、dense + exact，只翻转重排开关（`bge-reranker-v2-m3` 重排前 20 个
-候选，约 0.4 s/次）：
-
-| 指标 | 重排关 | 重排开 |
-|---|:---:|:---:|
-| Recall@5 | 57.53% | **69.86%** |
-| Recall@10 | 67.12% | **78.08%** |
-| MRR | 0.437 | **0.530** |
-
-“重排关”一行比上表的 dense+exact 基线（58.90%）低一条 query：同一组权重在云端与本地编码
-之间有此量级的抖动，不影响对比方向。
-
-逐查询：改善 11、变差 2、不变 60。两条变差的都是“中文动词 + 英文名词”结构（`取得零件的 CAM
-setup 物件`、`create hole feature 建立孔特徵`），重排压低了 API 字面名的分量。另有两件实际
-相关的事：
+另有两件实际相关的事：
 
 - 本地 BGE-M3 与云端同名模型之间**不需要重建索引**：向量余弦 0.99988–0.99994，2,000 条重编码后
   73 条 golden 的 top-10 重合 97.1%（其余是 batch=1 与 batch=128 的浮点噪声）。
 - 纯中文 2–4 字查询仍会失手（`拉伸` 查到 `RelaxationLength`）；补上英文术语
   （`创建拉伸特征 extrusion`），或按名走 `get_class` / `get_member`。
+
+### 幻觉测试：闭卷 vs. 带工具
+
+同一模型（`deepseek-ai/DeepSeek-V4.1-Flash`）、同一组 33 条 golden 问题、temperature 0，
+唯一变量是四个工具能否通过 MCP 函数调用拿到。
+
+判分是机械的，可复跑：答案里每个标识符（`NXOpen.*` 点路径，加上答案自己未声明的三段式以上
+驼峰名）都拿到 NXOpen 反射里核对——`NXOpen.dll`、`NXOpen.Utilities.dll`、`NXOpen.UF.dll`，
+接受 `类型.成员` 以及 `NXOpen.Session.Parts.Work.CAMSetup` 这类属性链。判据先自校准：
+13 个已知真实名必须被接受、6 个已知假名必须被拒绝，否则本次统计作废。只用 XML 文档索引做
+判据是错的——它漏掉了 `NXOpen.Session.GetSession` 这类真实成员。
+
+```bash
+python eval/halluc_test.py collect --out answers.jsonl   # 问模型
+python eval/halluc_test.py grade --answers answers.jsonl # 只用反射判分
+```
+
+| 指标 | 闭卷 | 带工具 |
+|---|:---:|:---:|
+| 提出的标识符总数 | 405 | 637 |
+| 其中不存在的标识符 | **177（43.7%）** | **23（3.6%）** |
+| 完全没编名字的答案 | 4/33 | **24/33** |
+| 点名正确类且全程无编造 | 4/33 | **16/33** |
+| 至少提到正确类 | 29/33 | 25/33 |
+| 33 题总耗时 | 311 s | 573 s |
+
+按标识符算，编造率降到 1/12；按题目算，无编造答案从 4 条升到 24 条。“至少提到正确类”反而
+下降是有原因的：闭卷答案是散文，常能点到正确的类名却把成员编错；带工具的答案是代码，直接用
+被查到的成员，较少复述类名。工具带来的是不再出现发明的名字——`MillGeometryBuilder`（真名
+`MillGeomBuilder`）、`CreateCavityMilling`、`NXOpen.CAM.CutMethod` 这类不再出现。
 
 ## 演示
 
@@ -274,19 +272,11 @@ setup 物件`、`create hole feature 建立孔特徵`），重排压低了 API �
 中英文均可）与 `get_class`（成员 + 继承链），最后写出的每个成员——`FeedsBuilder`、
 `SpindleRpmToggle`、`SpindleRpmBuilder.Value`——都在真实 API 中存在，并带 NX 版本信息。
 
-## 共享已建索引
+## 索引许可边界
 
-索引是单个 SQLite 文件（NX 12 全量约 500 MB），同事可跳过数小时的构建：
-
-1. 安装 `nxopen-mcp-enhanced`（不需要 `[reflect]`，继承链已写进索引）。
-2. 把索引复制到 `~/.nxopen-mcp-enhanced/index.db`（或放别处，`serve` 时用 `--db <path>`）。
-3. 注册：`claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve`。
-
-语义检索另需一个嵌入后端：装 `[embed]` 跑本地模型，或按“远程嵌入与重排”接入硅基流动的免费
-`BAAI/bge-m3`（不下载模型）。`get_class` / `get_member` 只查索引，不依赖嵌入后端。
-
-**许可边界：** 索引内嵌了 Siemens API 文档文本。在持有 NX 授权的组织内部共享是合理的；
-**不要公开分发索引文件**，授权范围外的用户应自行用 `nxopen-mcp-enhanced index` 构建。
+索引内嵌了 Siemens API 文档文本。用本机授权的 NX 安装构建索引是 `nxopen-mcp-enhanced index`
+做的事；这样的索引只在持有 NX 授权的组织内部使用。**不要公开分发索引文件**，授权范围外的
+用户应自行构建。
 
 ## 许可与知识产权
 
