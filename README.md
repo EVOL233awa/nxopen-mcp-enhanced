@@ -5,7 +5,6 @@
 > **Our enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)
 > and the MCP component of
 > [nxopen-journal-toolkit](https://github.com/EVOL233awa/nxopen-journal-toolkit).
-> Not related to `NX_MCP-Enhanced` (a separate NX 2506 session-automation project).
 
 This fork can be installed **standalone** (API retrieval only), but it is **recommended to install it
 together with the [`nxopen-journal`](https://github.com/EVOL233awa/nxopen-journal) skill**: the MCP
@@ -19,7 +18,7 @@ verification gates. `nxopen-journal-toolkit` installs both and checks them toget
 | Package / module / command | `nxopen-mcp` / `nxopen_mcp` / `nxopen-mcp` | `nxopen-mcp-enhanced` / `nxopen_mcp_enhanced` / `nxopen-mcp-enhanced` |
 | Default data dir | `~/.nxopen-mcp/` | `~/.nxopen-mcp-enhanced/` (coexists with upstream) |
 | Embeddings | Local BGE-M3 in-process | Local BGE-M3 **or** OpenAI-compatible remote embedding |
-| Reranking | None | Optional `/v1/rerank` (bge-reranker-v2-m3), 15 s timeout, skipped for unique names |
+| Reranking | None | Optional `/v1/rerank` (bge-reranker-v2-m3), 15 s timeout, skipped for unique names; **recommended** (+12.3 pt Recall@5) |
 | Offline behavior | Fails when the embedding service is down | Whole-name and CamelCase-token local exact fallback, notice on first line |
 | `get_class` | Full member list | Paginated `offset`/`limit` (default 200, footer shows total and next offset) |
 | Concurrency | Synchronous tool handlers | Async handlers (`asyncio.to_thread`); `get_class`/`get_member` answer while a slow search runs |
@@ -47,10 +46,11 @@ agents in the real docs instead of guesses:
 - **RRF fusion** available to combine channels — though evaluation made
   dense + exact the default (see [Evaluation](#evaluation)).
 
-By default everything runs locally and offline against an index built from your own
-licensed NX installation — no Siemens files are bundled or sent anywhere. Remote
-embedding/reranking is opt-in; when enabled, only query and document text is sent
-to the provider you configure.
+The default is fully local and offline against an index built from your own
+licensed NX installation — no Siemens files are bundled or sent anywhere. The
+recommended setup then adds a remote embedding/rerank provider
+(see [Remote embedding and reranking](#remote-embedding-and-reranking-recommended));
+when it is enabled, only query and document text leaves the machine.
 
 ## Quick start
 
@@ -60,9 +60,12 @@ Requires **Python 3.11+**.
 # 1. Install from this repository (not on PyPI yet)
 git clone https://github.com/EVOL233awa/nxopen-mcp-enhanced
 cd nxopen-mcp-enhanced
-# local embeddings: downloads ~2 GB BGE-M3 on first use
-pip install -e ".[embed,reflect]"
-# remote embeddings instead: pip install -e ".[reflect]" and set NXOPEN_MCP_* (see below)
+# Recommended: remote embeddings + reranking. SiliconFlow serves BAAI/bge-m3 and
+#   BAAI/bge-reranker-v2-m3 for free, so nothing is downloaded. Set the
+#   NXOPEN_MCP_* variables first (see "Remote embedding and reranking").
+pip install -e ".[reflect]"
+# Or fully local and offline: downloads ~2 GB BGE-M3 on first use
+# pip install -e ".[embed,reflect]"
 
 # 2. Build the index from YOUR NX installation (one-time — see time note below)
 nxopen-mcp-enhanced index --nx-path "D:\Siemens\NX12.0"
@@ -81,32 +84,43 @@ If you use `nxopen-journal-toolkit`, `nxjt install` performs steps 1 and 3 for y
 assemblies in the same folders.
 
 Extras: `[embed]` pulls in `FlagEmbedding` (downloads the ~2GB BGE-M3
-model on first use) — required for indexing and semantic search.
+model on first use) — needed only for the local embedding path.
 `[reflect]` pulls in `pythonnet` so `get_class` can show inherited
 members; skip it and indexing still works, just without inheritance
 chains.
 
 **How long does indexing take?** Honest numbers: a full NX 12 doc set is
-~100k members; on an 8-core laptop CPU that's **several hours** of
+~100k members; on an 8-core laptop CPU that's **several hours** of local
 embedding (memory-bandwidth-bound — `--workers N` helps mainly on
 machines with more memory channels; a CUDA GPU helps a lot). Plan to run
 it overnight, or copy a teammate's index (see
-[Sharing a pre-built index](#sharing-a-pre-built-index)).
+[Sharing a pre-built index](#sharing-a-pre-built-index)). With a remote
+embedding service the wall time follows the provider's rate limit;
+`--workers N` submits batches concurrently.
 
-**First semantic query is slow by design.** `serve` starts instantly, and
+**First semantic query is slow by design (local path).** `serve` starts instantly, and
 `get_class` / `get_member` respond immediately, but the first
 `search_api` / `find_builder` call loads the BGE-M3 model (~1–2 min).
 After that, semantic queries take seconds. If your MCP client shows the
 first search "hanging", it's the one-time model load — let it finish.
+The remote path has no load step: ~1 s per semantic query.
 
 By default the index is written to `~/.nxopen-mcp-enhanced/index.db`; override with
 `--db <path>` on both `index` and `serve`.
 
-## Remote embedding and reranking (optional)
+## Remote embedding and reranking (recommended)
 
-The default local BGE-M3 path needs no configuration. To use an OpenAI-compatible
-service instead (no `[embed]` extra, no 2 GB download), set these before `index`
-and `serve`:
+**SiliconFlow is the recommended provider**: it serves `BAAI/bge-m3` (1024-dim
+embeddings) and `BAAI/bge-reranker-v2-m3` (reranking) as free models on its
+official pricing page — the same two models this fork defaults to, so retrieval
+quality is unchanged while the local model and its compute disappear. The free
+tier has fixed rate limits and requires identity verification; the `Pro/`
+variants of the same models are paid fast tiers. Check the
+[pricing page](https://siliconflow.cn/pricing) and your console for current
+terms.
+
+The remote path installs no `[embed]` extra and downloads no model. Set these
+before `index` and `serve`:
 
 | Variable | Example |
 |---|---|
@@ -118,6 +132,11 @@ and `serve`:
 | `NXOPEN_MCP_RERANK_URL` | `https://api.siliconflow.cn/v1/rerank` |
 | `NXOPEN_MCP_RERANK_MODEL` | `BAAI/bge-reranker-v2-m3` |
 | `NXOPEN_MCP_RERANK_API_KEY` | your bearer token |
+
+Any OpenAI-compatible embedding service accepts the same variables (Ollama uses
+`NXOPEN_MCP_EMBEDDER=ollama`). `index` and `serve` must use the **same** settings:
+the vectors in the index come from whichever model built it, so switching models
+means rebuilding the index.
 
 Behavior:
 - Reranking only reorders the first 20 candidates; it has a 15 s timeout and falls
@@ -188,8 +207,8 @@ codex mcp add nxopen -- nxopen-mcp-enhanced serve
 ```
 
 Restart Codex, then verify with `codex mcp list` (or just ask it to look
-up an NXOpen class — you'll see the `nxopen` tool calls). Note the same
-first-semantic-query model load (~1–2 min) applies here.
+up an NXOpen class — you'll see the `nxopen` tool calls). On the local
+embedding path the same first-semantic-query model load (~1–2 min) applies here.
 
 ### Cursor
 
@@ -306,6 +325,30 @@ shortest name first, capped at 3) — matches dense recall while
 default is therefore **dense + exact**; the sparse channel remains
 available via the `channels` parameter of `search()`.
 
+### Reranking pays off
+
+Same index, same 73 queries, dense + exact, only the rerank switch flipped
+(`bge-reranker-v2-m3` over the first 20 candidates, ~0.4 s per query):
+
+| metric | rerank off | rerank on |
+|---|:---:|:---:|
+| Recall@5 | 57.53% | **69.86%** |
+| Recall@10 | 67.12% | **78.08%** |
+| MRR | 0.437 | **0.530** |
+
+Per query: 11 improved, 2 got worse, 60 unchanged. Both regressions are
+"Chinese verb + English noun" queries (`取得零件的 CAM setup 物件`,
+`create hole feature 建立孔特徵`), where reranking down-weights the literal
+API name. Two further effects matter in practice:
+
+- The index does **not** need rebuilding when switching between local BGE-M3
+  and the same model served remotely: the vectors agree to cosine 0.99988–0.99994,
+  and a 2,000-member re-embedding kept 97.1% of the golden set's top-10
+  identical (the residual is batching float noise, batch 1 vs 128 included).
+- Plain 2–4 character Chinese queries with no English term still miss
+  (`拉伸` returns `RelaxationLength`); add the English term
+  (`创建拉伸特征 extrusion`) or use `get_class` / `get_member` by name.
+
 ## Demo
 
 ![Claude Code querying the real NXOpen API through nxopen-mcp-enhanced](docs/demo.gif)
@@ -327,13 +370,15 @@ teammates can skip the hours-long build:
    and pass `--db <path>` to `serve`).
 3. Register the server: `claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve`
 
+Semantic search still needs an embedding backend: install `[embed]` for the local
+model, or configure SiliconFlow's free `BAAI/bge-m3` as described in
+[Remote embedding and reranking](#remote-embedding-and-reranking-recommended)
+(no model download). `get_class` / `get_member` read the index only and need no
+embedding backend at all.
+
 A full step-by-step onboarding guide (with troubleshooting):
 [docs/setup-prebuilt-index.md](docs/setup-prebuilt-index.md)
 ([繁體中文版](docs/setup-prebuilt-index.zh-TW.md)).
-
-The BGE-M3 model (~2 GB) still downloads on the first *semantic* query —
-it encodes the query text, independent of the index. Exact lookups
-(`get_class` / `get_member`) never need the model.
 
 **Licensing boundary:** the index embeds text from Siemens' API
 documentation. Sharing it **within an organization whose seats are

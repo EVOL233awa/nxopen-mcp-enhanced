@@ -18,8 +18,9 @@
 |------|-------|
 | Windows PC | macOS/Linux also work — adjust paths |
 | Python 3.11+ | Check with `python --version`; install from https://www.python.org/downloads/ and **tick "Add python.exe to PATH"** |
-| ~3 GB of disk | 0.5 GB index + 2 GB BGE-M3 model (auto-downloaded on first semantic query) |
+| ~0.5 GB of disk | The index. Add ~2 GB only if you use the local BGE-M3 embedding path |
 | The `index.db` file | ~500 MB, from your teammate |
+| An embedding backend | SiliconFlow's free `BAAI/bge-m3` + `BAAI/bge-reranker-v2-m3` (recommended, nothing downloaded) or the local `[embed]` extra |
 | Claude Code (or Codex / Cursor) | any MCP-capable AI coding tool |
 
 ---
@@ -29,13 +30,15 @@
 Open a terminal:
 
 ```bash
-pip install "nxopen-mcp-enhanced[embed]"
+pip install nxopen-mcp-enhanced
 ```
 
 - You do **not** need `[reflect]` when using a pre-built index
   (inheritance chains are already baked in).
-- `[embed]` is required for semantic search; it pulls in PyTorch, so the
-  download takes a while.
+- Semantic search needs an embedding backend, not PyTorch: the recommended
+  setup uses SiliconFlow's free models, so no `[embed]` extra and no 2 GB
+  download. Install `pip install "nxopen-mcp-enhanced[embed]"` only if you
+  want the local model instead.
 
 Verify:
 
@@ -85,8 +88,8 @@ claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve
 - `-s user`: available in every project, not just one folder.
 - Non-default index location:
   `claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve --db "D:\path\index.db"`
-- Tip: add `--preload` after `serve` to warm the model at startup so the
-  first semantic query doesn't wait for the model load.
+- Tip (local embedding path only): add `--preload` after `serve` to warm the
+  model at startup so the first semantic query doesn't wait for the model load.
 
 ### Option B: edit the config file directly
 
@@ -124,6 +127,8 @@ e.g. `C:\\Python312\\Scripts\\nxopen-mcp-enhanced.exe` (double backslashes in JS
 
    > Use nxopen to search "how to set the spindle speed"
 
+   With a remote embedding service (the recommended SiliconFlow setup) this
+   answers in about a second. On the **local** path instead:
    ⏳ **The first semantic query pauses for 1–3 minutes**: it downloads
    the BGE-M3 model (~2 GB, once ever) and loads it into memory. After
    that, semantic queries within the same session take seconds.
@@ -134,6 +139,31 @@ All green? You're done. From now on just work normally, e.g.:
 > Write NXOpen C# that creates a drilling operation and sets the feed rate
 
 Claude will call the nxopen tools automatically before writing code.
+
+---
+
+## 4b. Remote embedding instead of the local model
+
+The local model is optional. SiliconFlow serves `BAAI/bge-m3` and
+`BAAI/bge-reranker-v2-m3` as free models, which is exactly what this server
+defaults to, so retrieval behaviour is unchanged and nothing is downloaded.
+Set these environment variables before starting the server (add them to the
+`env` block of your MCP config so the client passes them through):
+
+| Variable | Value |
+|---|---|
+| `NXOPEN_MCP_EMBEDDER` | `remote` |
+| `NXOPEN_MCP_EMBED_URL` | `https://api.siliconflow.cn` |
+| `NXOPEN_MCP_EMBED_MODEL` | `BAAI/bge-m3` |
+| `NXOPEN_MCP_EMBED_API_KEY` | your SiliconFlow API key |
+| `NXOPEN_MCP_RERANK` | `1` |
+| `NXOPEN_MCP_RERANK_URL` | `https://api.siliconflow.cn/v1/rerank` |
+| `NXOPEN_MCP_RERANK_MODEL` | `BAAI/bge-reranker-v2-m3` |
+| `NXOPEN_MCP_RERANK_API_KEY` | the same key |
+
+The index you received stays valid: the free models are the same weights this
+project builds with. Details and the full behaviour table are in the
+[main README](../README.md#remote-embedding-and-reranking-recommended).
 
 ---
 
@@ -159,18 +189,19 @@ args = ["serve"]
 | `/mcp` says not connected | Old sessions don't auto-connect → open a new session / restart the tool |
 | `error: index not found at ...` | Index isn't at the default path → re-check step 2, or add `--db` when registering |
 | `error: index ... schema version` | The index was built by an incompatible nxopen-mcp-enhanced version → get a matching index or rebuild |
-| First search "hangs" for minutes | Normal: one-time model download + load — let it finish |
-| Model download fails (corporate network) | Needs access to huggingface.co; set `HTTPS_PROXY` if you're behind a proxy |
+| First search "hangs" for minutes | Local embedding path only: one-time model download + load — let it finish, or switch to the remote backend (step 4b) |
+| Model download fails (corporate network) | Needs access to huggingface.co; set `HTTPS_PROXY`, or use the remote backend (step 4b) which downloads nothing |
 | `nxopen-mcp-enhanced` is not recognized | Scripts dir not on PATH → see step 1, use the full path |
-| Exact lookups fast, semantic slow after restart | Normal: the model stays loaded only while the server lives; after a restart the first semantic query reloads it (~1 min, no re-download). Use `--preload` to hide this |
+| Exact lookups fast, semantic slow after restart | Local path: the model stays loaded only while the server lives; after a restart the first semantic query reloads it (~1 min, no re-download). Use `--preload` to hide this, or switch to the remote backend |
+| Search fails with an embedding-service error | Backend unreachable → check the API key and network, or fall back to exact lookups (`get_class` / `get_member`), which never use the embedding service |
 | Want to inspect the index | It's a SQLite file; a full NX 12 doc set has ~98k rows in the `members` table |
 
 ---
 
 ## 7. Maintenance
 
-- **Upgrade the software**: `pip install -U "nxopen-mcp-enhanced[embed]"` (the
-  index is unaffected).
+- **Upgrade the software**: `pip install -U nxopen-mcp-enhanced` (add `[embed]`
+  if you use the local model; the index is unaffected).
 - **Switch to another NX version's index**: overwrite the file at the
   same path — no re-registration needed.
 - **Build your own index** (if you have an NX installation): see the

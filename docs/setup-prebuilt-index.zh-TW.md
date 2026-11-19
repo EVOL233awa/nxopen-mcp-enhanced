@@ -17,8 +17,9 @@
 |------|------|
 | Windows 電腦 | macOS/Linux 也可,路徑自行對應 |
 | Python 3.11 或更新 | 檢查:`python --version`;沒有就到 https://www.python.org/downloads/ 安裝,**安裝時勾選 "Add python.exe to PATH"** |
-| 磁碟空間約 3 GB | 索引 0.5 GB + BGE-M3 模型 2 GB(首次語意查詢自動下載) |
+| 磁碟空間約 0.5 GB | 索引本身;只有走本地 BGE-M3 路線才再加約 2 GB 模型 |
 | `index.db` 檔案 | 同事給你的,約 500 MB |
+| 嵌入後端 | 硅基流動免費的 `BAAI/bge-m3` + `BAAI/bge-reranker-v2-m3`(建議,不下載任何模型)或本地 `[embed]` |
 | Claude Code(或 Codex / Cursor) | 任一支援 MCP 的 AI 編碼工具 |
 
 ---
@@ -28,11 +29,13 @@
 開啟「命令提示字元」或 PowerShell:
 
 ```bash
-pip install "nxopen-mcp-enhanced[embed]"
+pip install nxopen-mcp-enhanced
 ```
 
 - 用現成索引**不需要** `[reflect]`(繼承鏈已包含在索引中)
-- `[embed]` 是語意搜尋必需的;安裝內容含 PyTorch,會下載一陣子
+- 語意搜尋需要的是嵌入後端,不是 PyTorch:建議用硅基流動的免費模型,不必裝
+  `[embed]`、也不下載 2 GB 模型。要改用本地模型才裝
+  `pip install "nxopen-mcp-enhanced[embed]"`
 
 安裝完驗證:
 
@@ -118,6 +121,7 @@ claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve
 
    > 用 nxopen 搜尋「如何設定主軸轉速」
 
+   走遠端嵌入服務(建議的硅基流動設定)時,這一步約 1 秒回覆。走**本地**路線則是:
    ⏳ **第一次語意查詢會停 1–3 分鐘**:先下載 BGE-M3 模型(約 2 GB,
    僅此一次),再載入記憶體。之後同一個 session 內都是秒回。
    **這不是當機,請不要中斷它。**
@@ -127,6 +131,28 @@ claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve
 > 幫我寫一個建立鑽孔操作並設定進給率的 NXOpen C# 程式
 
 Claude 會自動呼叫 nxopen 的工具查真實 API 再寫程式。
+
+---
+
+## 4b. 改用遠端嵌入(不下載模型)
+
+本地模型是選配。硅基流動把 `BAAI/bge-m3` 與 `BAAI/bge-reranker-v2-m3` 標為免費模型,
+正是本 server 的預設組合,所以檢索行為不變、也不必下載任何東西。啟動 server 前設好這幾
+個環境變數(寫進 MCP 設定的 `env` 區塊,讓 client 傳給 server):
+
+| 變數 | 值 |
+|---|---|
+| `NXOPEN_MCP_EMBEDDER` | `remote` |
+| `NXOPEN_MCP_EMBED_URL` | `https://api.siliconflow.cn` |
+| `NXOPEN_MCP_EMBED_MODEL` | `BAAI/bge-m3` |
+| `NXOPEN_MCP_EMBED_API_KEY` | 你的硅基流動 API key |
+| `NXOPEN_MCP_RERANK` | `1` |
+| `NXOPEN_MCP_RERANK_URL` | `https://api.siliconflow.cn/v1/rerank` |
+| `NXOPEN_MCP_RERANK_MODEL` | `BAAI/bge-reranker-v2-m3` |
+| `NXOPEN_MCP_RERANK_API_KEY` | 同一把 key |
+
+拿到的索引照樣可用:免費模型就是本專案建索引時用的同一組權重。完整行為表見
+主 [README](../README.zh-CN.md#远程嵌入与重排推荐)。
 
 ---
 
@@ -151,17 +177,18 @@ args = ["serve"]
 |------|-----------|
 | `/mcp` 顯示 not connected | 舊 session 不會自動連線 → 開新 session 或重啟工具 |
 | `error: index not found at ...` | 索引不在預設位置 → 確認第 2 步的路徑,或註冊時加 `--db` |
-| 第一次搜尋「卡住」幾分鐘 | 正常:一次性下載並載入 BGE-M3 模型,等它完成 |
-| 模型下載失敗(公司網路) | 需要能連 huggingface.co;有 proxy 時先設 `HTTPS_PROXY` 環境變數 |
+| 第一次搜尋「卡住」幾分鐘 | 只有本地路線會這樣:一次性下載並載入 BGE-M3 模型,等它完成;或改走遠端(第 4b 步) |
+| 模型下載失敗(公司網路) | 需要能連 huggingface.co;有 proxy 時先設 `HTTPS_PROXY`,或改走遠端(第 4b 步),完全不下載 |
 | `nxopen-mcp-enhanced` 不是內部或外部命令 | Scripts 目錄不在 PATH → 見第 1 步,改用完整路徑 |
-| 精確查詢很快、語意查詢每次都慢 | 正常設計:模型只在 server 存活期間常駐;重啟 session 後第一次語意查詢會重新載入(約 1 分鐘,不會重新下載) |
+| 精確查詢很快、語意查詢每次都慢 | 本地路線:模型只在 server 存活期間常駐;重啟 session 後第一次語意查詢會重新載入(約 1 分鐘,不會重新下載)。想隱藏這段用 `--preload`,或改走遠端 |
+| 搜尋回報嵌入服務錯誤 | 後端不可達 → 檢查 API key 與網路;仍可用 `get_class` / `get_member` 走精確查詢,它們完全不碰嵌入服務 |
 | 想確認索引內容 | 索引是 SQLite 檔,`members` 表約 9.8 萬筆即為完整 NX12 文件 |
 
 ---
 
 ## 7. 之後的維護
 
-- **升級軟體**:`pip install -U "nxopen-mcp-enhanced[embed]"`(索引不受影響)
+- **升級軟體**:`pip install -U nxopen-mcp-enhanced`(走本地模型時加 `[embed]`;索引不受影響)
 - **換 NX 版本的索引**:拿到新的 `index.db` 直接覆蓋同一路徑即可,
   不用重新註冊
 - **自己建索引**(有 NX 安裝時):見主 [README](../README.zh-CN.md)
