@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-> **Enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)
+> **Our enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)
 > and the MCP component of
 > [nxopen-journal-toolkit](https://github.com/EVOL233awa/nxopen-journal-toolkit).
 > Not related to `NX_MCP-Enhanced` (a separate NX 2506 session-automation project).
