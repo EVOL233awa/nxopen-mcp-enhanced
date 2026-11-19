@@ -1,15 +1,31 @@
 # nxopen-mcp-enhanced
 
-**English** | [繁體中文](README.zh-TW.md)
+**English** | [简体中文](README.zh-CN.md)
 
-> **Enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp).
+> **Enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)
+> and the MCP component of
+> [nxopen-journal-toolkit](https://github.com/EVOL233awa/nxopen-journal-toolkit).
 > Not related to `NX_MCP-Enhanced` (a separate NX 2506 session-automation project).
-> Adds: OpenAI-compatible remote embeddings, optional `/v1/rerank` reranking,
-> exact-name fallback when the embedding service is unreachable, a 15 s rerank
-> timeout, and rerank skipping for unique exact names. The local BGE-M3 path is
-> unchanged. Package, module, command and data directory are namespaced
-> (`nxopen-mcp-enhanced`, `nxopen_mcp_enhanced`, `nxopen-mcp-enhanced`,
-> `~/.nxopen-mcp-enhanced/`) so this fork and upstream can coexist.
+
+This fork can be installed **standalone** (API retrieval only), but it is **recommended to install it
+together with the [`nxopen-journal`](https://github.com/EVOL233awa/nxopen-journal) skill**: the MCP
+supplies the real NXOpen API facts, the skill supplies the NX 12 journal recipes, batch runner and
+verification gates. `nxopen-journal-toolkit` installs both and checks them together.
+
+### Changes vs. upstream
+
+| Area | Upstream `nxopen-mcp` 0.2.0 | This fork |
+|---|---|---|
+| Package / module / command | `nxopen-mcp` / `nxopen_mcp` / `nxopen-mcp` | `nxopen-mcp-enhanced` / `nxopen_mcp_enhanced` / `nxopen-mcp-enhanced` |
+| Default data dir | `~/.nxopen-mcp/` | `~/.nxopen-mcp-enhanced/` (coexists with upstream) |
+| Embeddings | Local BGE-M3 in-process | Local BGE-M3 **or** OpenAI-compatible remote embedding |
+| Reranking | None | Optional `/v1/rerank` (bge-reranker-v2-m3), 15 s timeout, skipped for unique names |
+| Offline behavior | Fails when the embedding service is down | Whole-name and CamelCase-token local exact fallback, notice on first line |
+| `get_class` | Full member list | Paginated `offset`/`limit` (default 200, footer shows total and next offset) |
+| Concurrency | Synchronous tool handlers | Async handlers (`asyncio.to_thread`); `get_class`/`get_member` answer while a slow search runs |
+| NX 12 XML discovery | `UGII/managed` | also `NXBIN/managed` and install root |
+
+The local BGE-M3 retrieval path is unchanged; all additions are opt-in or backwards-compatible.
 
 MCP server that gives AI coding agents (Claude Code, Codex, Cursor)
 accurate knowledge of the Siemens NXOpen .NET API — eliminating
@@ -41,8 +57,12 @@ to the provider you configure.
 Requires **Python 3.11+**.
 
 ```bash
-# 1. Install from PyPI (or run without installing: uvx nxopen-mcp-enhanced)
-pip install "nxopen-mcp-enhanced[embed,reflect]"
+# 1. Install from this repository (not on PyPI yet)
+git clone https://github.com/EVOL233awa/nxopen-mcp-enhanced
+cd nxopen-mcp-enhanced
+# local embeddings: downloads ~2 GB BGE-M3 on first use
+pip install -e ".[embed,reflect]"
+# remote embeddings instead: pip install -e ".[reflect]" and set NXOPEN_MCP_* (see below)
 
 # 2. Build the index from YOUR NX installation (one-time — see time note below)
 nxopen-mcp-enhanced index --nx-path "D:\Siemens\NX12.0"
@@ -53,9 +73,12 @@ claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve
 # 4. Ask Claude Code to write NXOpen code — it now queries real APIs.
 ```
 
-`index` looks for `NXOpen*.xml` doc files under `<nx-path>\UGII\managed`
-(falling back to `<nx-path>` itself), and for `NXOpen*.dll` assemblies in
-the same folder.
+If you use `nxopen-journal-toolkit`, `nxjt install` performs steps 1 and 3 for you and
+`nxjt index` performs step 2; the manual commands above are the standalone path.
+
+`index` looks for `NXOpen*.xml` doc files under `<nx-path>\UGII\managed`, then
+`<nx-path>\NXBIN\managed`, then `<nx-path>` itself, and for `NXOpen*.dll`
+assemblies in the same folders.
 
 Extras: `[embed]` pulls in `FlagEmbedding` (downloads the ~2GB BGE-M3
 model on first use) — required for indexing and semantic search.

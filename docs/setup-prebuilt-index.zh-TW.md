@@ -164,7 +164,7 @@ args = ["serve"]
 - **升級軟體**:`pip install -U "nxopen-mcp-enhanced[embed]"`(索引不受影響)
 - **換 NX 版本的索引**:拿到新的 `index.db` 直接覆蓋同一路徑即可,
   不用重新註冊
-- **自己建索引**(有 NX 安裝時):見主 [README](../README.zh-TW.md)
+- **自己建索引**(有 NX 安裝時):見主 [README](../README.zh-CN.md)
   的「快速開始」
 
 有問題請洽提供索引檔的同事,或到
