@@ -260,7 +260,7 @@ python eval/halluc_test.py grade --answers answers.jsonl # 只用反射判分
 
 ## 演示
 
-![Claude Code 通过 nxopen-mcp-enhanced 查询真实 NXOpen API](docs/demo.gif)
+![Claude Code 通过 nxopen-mcp-enhanced 查询真实 NXOpen API](https://raw.githubusercontent.com/EVOL233awa/nxopen-mcp-enhanced/master/docs/demo.gif)
 
 一次真实会话：让 Claude Code 写设置主轴转速的 NXOpen 代码，它调用 `search_api`（语义检索，
 中英文均可）与 `get_class`（成员 + 继承链），最后写出的每个成员——`FeedsBuilder`、

@@ -342,7 +342,7 @@ python eval/halluc_test.py grade --answers answers.jsonl # reflection only
 
 ## Demo
 
-![Claude Code querying the real NXOpen API through nxopen-mcp-enhanced](docs/demo.gif)
+![Claude Code querying the real NXOpen API through nxopen-mcp-enhanced](https://raw.githubusercontent.com/EVOL233awa/nxopen-mcp-enhanced/master/docs/demo.gif)
 
 A real session: asked to write NXOpen code that sets the spindle speed,
 Claude Code calls `search_api` (semantic search, English or Chinese) and
