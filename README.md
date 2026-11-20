@@ -342,16 +342,19 @@ text is always an answer, never a "let me look that up" preamble.
 
 | metric | without MCP | with MCP |
 |---|:---:|:---:|
-| identifiers proposed | 403 | 1,064 |
-| invented identifiers | **160 (39.7%)** | **27 (2.5%)** |
-| answers with no invented identifier | 4/33 | **19/33** |
-| completion tokens (reasoning included) | 367k | 186k |
-| total time for 33 answers | 3,241 s | 1,937 s |
+| exactly correct | 4/33 (12.1%) | **19/33 (57.6%)** |
+| wrong but real API | 0/33 (0%) | 0/33 (0%) |
+| hallucinated (API does not exist) | **29/33 (87.9%)** | 14/33 (42.4%) |
+| total time | 3,241 s | 1,937 s |
+| total tokens consumed (completion, reasoning included) | 367k | 186k |
 
-Inventing an API drops 16x per identifier; the per-answer count moves less —
-19/33 tool answers invent nothing vs 4/33 — because tool answers are longer
-(median 6.0k vs 3.6k characters), so they expose more names to check. What the
-tools buy is the absence of invented classes:
+An answer counts as exactly correct only if it names the target API and invents
+nothing; wrong-but-real means no invented name but no target API either;
+hallucinated means at least one name anywhere does not exist. Per name the rate
+falls from 160/403 (39.7%) to 27/1064 (2.5%) — tool answers are longer (median
+6.0k vs 3.6k characters) yet most names were looked up. Wrong-but-real is 0 in
+both columns: every answer that avoided fake names also named the target API.
+What the tools buy is the absence of invented classes:
 `NXOpen.CAM.CAMGroupCollection` and `NXOpen.CAM.CAMOperationCollection` written as
 types (the real members are `CAMSetup.CAMGroupCollection` and
 `CAMSetup.CAMOperationCollection`, returning `NCGroupCollection` /

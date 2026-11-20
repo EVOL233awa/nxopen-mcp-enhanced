@@ -393,6 +393,7 @@ def grade(args) -> None:
     res = {}
     for cond in ("closed", "tools"):
         proposed = invented = zero = named = clean = 0
+        exactly = wrong_real = halluc = 0
         spent = 0.0
         spent_tokens = 0
         for r in rows:
@@ -402,21 +403,33 @@ def grade(args) -> None:
             invented += len(fake)
             zero += not fake
             short = r["expected"].rsplit(".", 1)[-1]
-            if r["expected"] in r[cond] or short in r[cond]:
+            hit = r["expected"] in r[cond] or short in r[cond]
+            if hit:
                 named += 1
                 clean += not fake
+            if fake:
+                halluc += 1
+            elif hit:
+                exactly += 1
+            else:
+                wrong_real += 1
             spent += r[f"{cond}_s"]
             spent_tokens += r.get(f"{cond}_tokens", 0)
         n = len(rows)
         res[cond] = dict(proposed=proposed, invented=invented,
                          invented_rate=round(invented / max(proposed, 1), 4),
                          answers_no_invention=zero,
+                         exactly_correct=exactly,
+                         wrong_but_real=wrong_real,
+                         hallucinated_answers=halluc,
                          expected_api_named=named, named_without_invention=clean,
                          n=n, total_s=round(spent, 1),
                          total_tokens=spent_tokens)
         print(f"{cond}: proposed {proposed}, invented {invented} "
               f"({res[cond]['invented_rate']:.1%}), answers with no invented name "
-              f"{zero}/{n}, expected API named {named}/{n}, "
+              f"{zero}/{n}, exactly correct {exactly}/{n}, wrong but real "
+              f"{wrong_real}/{n}, hallucinated answer {halluc}/{n}, "
+              f"expected API named {named}/{n}, "
               f"named without invention {clean}/{n}, {res[cond]['total_s']}s")
     if rows:
         print("\nmodel:", args.model, "| queries:", len(rows))
