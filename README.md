@@ -326,19 +326,12 @@ does not declare itself) is checked against NXOpen reflection — `NXOpen.dll`,
 `NXOpen.Utilities.dll` and `NXOpen.UF.dll` — accepting `type.member` and
 property chains such as `NXOpen.Session.Parts.Work.CAMSetup`. The oracle is
 calibrated before grading: 14 known-real names (enum values included) must be
-accepted and 7 known-fake names rejected, or the run aborts. The XML-doc index
-alone would be the wrong oracle — it omits real members such as
-`NXOpen.Session.GetSession`.
+accepted and 7 known-fake names rejected, or the run aborts.
 
 ```bash
 python eval/halluc_test.py collect --out answers.jsonl   # asks the model
 python eval/halluc_test.py grade --answers answers.jsonl # reflection only
 ```
-
-Each tool-assisted question gets its own MCP session and at most 16 tool calls.
-When the model is still querying at that budget — 28 of 33 questions — it is
-asked once more to write the final answer with the tools withheld, so the graded
-text is always an answer, never a "let me look that up" preamble.
 
 | metric | without MCP | with MCP |
 |---|:---:|:---:|
@@ -346,21 +339,6 @@ text is always an answer, never a "let me look that up" preamble.
 | hallucinated (API does not exist) | **29/33 (87.9%)** | 14/33 (42.4%) |
 | total time | 3,241 s | 1,937 s |
 | total tokens consumed (completion, reasoning included) | 367k | 186k |
-
-An answer counts as exactly correct only if it names the target API and invents
-nothing; hallucinated means at least one name anywhere does not exist. No answer
-was clean yet missed the target, so the table has only these two rows. Per name
-the rate falls from 160/403 (39.7%) to 27/1064 (2.5%) — tool answers are longer
-(median 6.0k vs 3.6k characters) yet most names were looked up. What the tools
-buy is the absence of invented classes:
-`NXOpen.CAM.CAMGroupCollection` and `NXOpen.CAM.CAMOperationCollection` written as
-types (the real members are `CAMSetup.CAMGroupCollection` and
-`CAMSetup.CAMOperationCollection`, returning `NCGroupCollection` /
-`OperationCollection`), `NXOpen.CAM.BlankGeometry` written as a class (it is a
-property returning `NXOpen.CAM.Geometry`), and `NXOpen.CAM.CutDepth` /
-`NXOpen.CAM.Stepover`, which do not exist as types. The few names still invented
-with tools are mostly enum-member guesses and fill-in placeholders
-(`CutPatternOptions.Follow`, `SomeOption`).
 
 ## Demo
 
