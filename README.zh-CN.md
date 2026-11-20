@@ -257,16 +257,14 @@ python eval/halluc_test.py grade --answers answers.jsonl # 只用反射判分
 | 指标 | 无 MCP | 有 MCP |
 |---|:---:|:---:|
 | 完全正确 | 4/33（12.1%） | **19/33（57.6%）** |
-| 答错 | 0/33（0%） | 0/33（0%） |
 | 幻觉（API 不存在） | **29/33（87.9%）** | 14/33（42.4%） |
 | 总耗时 | 3241 s | 1937 s |
 | 总消耗 token（完成侧，含思考） | 367k | 186k |
 
-判分按答案算且很严：点名了目标 API 且没有任何编造才算“完全正确”；没有编造但也没点名目标
-是“答错”；答案里只要有 1 个不存在的名字，整条就记为“幻觉”。按名字算，编造率从
-160/403（39.7%）降到 27/1064（2.5%）；带工具的答案更长（中位数 6.0k vs 3.6k 字符），但大部分
-名字都查过。“答错”两列都是 0：没编名字的答案都点名了目标 API。工具真正消掉的是
-不存在的类：`NXOpen.CAM.CAMGroupCollection` / `NXOpen.CAM.CAMOperationCollection` 被当成类型
+判分按答案算且很严：点名了目标 API 且没有任何编造才算“完全正确”；答案里只要有 1 个不存在的
+名字，整条就记为“幻觉”。本轮没有出现“零编造但没点名目标”的答案，所以表里只剩这两类。按名字
+算，编造率从 160/403（39.7%）降到 27/1064（2.5%）；带工具的答案更长（中位数 6.0k vs 3.6k
+字符），但大部分名字都查过。工具真正消掉的是不存在的类：`NXOpen.CAM.CAMGroupCollection` / `NXOpen.CAM.CAMOperationCollection` 被当成类型
 （真实成员是 `CAMSetup.CAMGroupCollection` 与 `CAMSetup.CAMOperationCollection`，分别返回
 `NCGroupCollection` / `OperationCollection`），`NXOpen.CAM.BlankGeometry` 被当成类（它是返回
 `NXOpen.CAM.Geometry` 的属性），以及根本不存在的 `NXOpen.CAM.CutDepth` /

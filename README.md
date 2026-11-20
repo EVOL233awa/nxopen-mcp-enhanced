@@ -343,17 +343,15 @@ text is always an answer, never a "let me look that up" preamble.
 | metric | without MCP | with MCP |
 |---|:---:|:---:|
 | exactly correct | 4/33 (12.1%) | **19/33 (57.6%)** |
-| wrong | 0/33 (0%) | 0/33 (0%) |
 | hallucinated (API does not exist) | **29/33 (87.9%)** | 14/33 (42.4%) |
 | total time | 3,241 s | 1,937 s |
 | total tokens consumed (completion, reasoning included) | 367k | 186k |
 
 An answer counts as exactly correct only if it names the target API and invents
-nothing; wrong means no invented name but no target API either; hallucinated
-means at least one name anywhere does not exist. Per name the rate falls from
-160/403 (39.7%) to 27/1064 (2.5%) — tool answers are longer (median 6.0k vs
-3.6k characters) yet most names were looked up. Wrong is 0 in both columns:
-every answer that avoided fake names also named the target API. What the tools
+nothing; hallucinated means at least one name anywhere does not exist. No answer
+was clean yet missed the target, so the table has only these two rows. Per name
+the rate falls from 160/403 (39.7%) to 27/1064 (2.5%) — tool answers are longer
+(median 6.0k vs 3.6k characters) yet most names were looked up. What the tools
 buy is the absence of invented classes:
 `NXOpen.CAM.CAMGroupCollection` and `NXOpen.CAM.CAMOperationCollection` written as
 types (the real members are `CAMSetup.CAMGroupCollection` and
