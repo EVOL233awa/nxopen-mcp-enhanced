@@ -236,9 +236,8 @@ Recall@5 高 13.7 pt。远程嵌入不提供 sparse 词权重，因此表内不�
 
 ### 幻觉测试：闭卷 vs. 带工具
 
-同一模型（`deepseek-ai/DeepSeek-V4.1-Flash`）、同一组 33 条 golden 问题、开启思考并置于模型
-最高强度（`enable_thinking: true`、`reasoning_effort: max`，即实际使用的设置），唯一变量是
-四个工具能否通过 MCP 函数调用拿到；temperature 0 只为可复现。
+同一模型（`deepseek-v4.1-flash-1017`，max 思考深度）、同一组 33 条 golden 问题，唯一变量是
+四个工具能否通过 MCP 函数调用拿到。
 
 判分是机械的，可复跑：答案里每个标识符（`NXOpen.*` 点路径，加上答案自己未声明的三段式以上
 驼峰名）都拿到 NXOpen 反射里核对——`NXOpen.dll`、`NXOpen.Utilities.dll`、`NXOpen.UF.dll`，

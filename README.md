@@ -314,11 +314,9 @@ Two further effects matter in practice:
 
 ### Hallucination test: closed book vs. with the tools
 
-Same model (`deepseek-ai/DeepSeek-V4.1-Flash`), same 33 golden questions,
-thinking on at the model's maximum reasoning effort (`enable_thinking: true`,
-`reasoning_effort: max`) — the setting it is used with in practice — and one
-variable: whether the four tools are reachable over MCP function calling.
-Temperature is 0 only to make the run reproducible.
+Same model (`deepseek-v4.1-flash-1017`, max thinking), same 33 golden
+questions, one variable: whether the four tools are reachable over MCP function
+calling.
 
 Grading is mechanical, so it can be re-run: every identifier in an answer
 (`NXOpen.*` dotted paths, plus CamelCase tokens with 3+ humps that the answer
