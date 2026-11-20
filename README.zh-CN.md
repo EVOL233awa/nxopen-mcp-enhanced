@@ -254,24 +254,22 @@ python eval/halluc_test.py grade --answers answers.jsonl # 只用反射判分
 每题带工具阶段独立开 MCP 会话、最多 16 次工具调用。到达预算时模型仍在查——33 题里有 28 题——
 会再问一次并收回工具，让它写最终答案，所以判分拿到的永远是答案，而不是“我查一下”的开场白。
 
-| 结果 | 闭卷 | 带工具 |
+| 指标 | 无 MCP | 有 MCP |
 |---|:---:|:---:|
-| 编造名 / 提出的 API 名 | 160 / 403 = **39.7%** | 27 / 1064 = **2.5%** |
-| 换算 | 每 2.5 个名字 1 个假 | 每 40 个名字 1 个假 |
-| 零编造的答案 | 4/33 | **19/33** |
-| 编造 ≥3 个名字的答案 | **21/33** | **4/33** |
-| 单题最多编造 | 18 个 | 4 个 |
+| 提出的标识符总数 | 403 | 1064 |
+| 其中不存在的标识符 | **160（39.7%）** | **27（2.5%）** |
+| 完全没编名字的答案 | 4/33 | **19/33** |
+| 完成 token（含思考） | 367k | 186k |
+| 33 题总耗时 | 3241 s | 1937 s |
 
-成本（33 题、思考 max）：闭卷 367k 完成 token / 3241 s；带工具 186k / 1937 s。
-
-分布比平均值更能说明问题：闭卷有 21/33 条答案至少编了 3 个名字，其中 12 条编了 6 个以上；
-带工具 19/33 条一个假名都没有，最坏一条 4 个。带工具的答案还更长（中位数 6.0k vs 3.6k
-字符），所以不是靠少写来压低编造数。工具真正消掉的是不存在的类：
-`NXOpen.CAM.CAMGroupCollection` / `NXOpen.CAM.CAMOperationCollection` 被当成类型（真实成员是
-`CAMSetup.CAMGroupCollection` 与 `CAMSetup.CAMOperationCollection`，分别返回 `NCGroupCollection`
-/ `OperationCollection`），`NXOpen.CAM.BlankGeometry` 被当成类（它是返回 `NXOpen.CAM.Geometry`
-的属性），以及根本不存在的 `NXOpen.CAM.CutDepth` / `NXOpen.CAM.Stepover`。带工具后仍被计为
-编造的，多是枚举成员猜测与占位符（`CutPatternOptions.Follow`、`SomeOption`）。
+按名字算，编造率降到约 1/16；按题算的变化没这么大——带工具 19/33 条无编造，闭卷 4/33——
+因为带工具的答案更长（中位数 6.0k vs 3.6k 字符），可检查的名字更多。工具真正消掉的是不存在的
+类：`NXOpen.CAM.CAMGroupCollection` / `NXOpen.CAM.CAMOperationCollection` 被当成类型（真实成员是
+`CAMSetup.CAMGroupCollection` 与 `CAMSetup.CAMOperationCollection`，分别返回
+`NCGroupCollection` / `OperationCollection`），`NXOpen.CAM.BlankGeometry` 被当成类（它是返回
+`NXOpen.CAM.Geometry` 的属性），以及根本不存在的 `NXOpen.CAM.CutDepth` /
+`NXOpen.CAM.Stepover`。带工具后仍被计为编造的，多是枚举成员猜测与占位符
+（`CutPatternOptions.Follow`、`SomeOption`）。
 
 ## 演示
 

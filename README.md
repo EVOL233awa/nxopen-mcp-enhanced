@@ -340,30 +340,26 @@ When the model is still querying at that budget — 28 of 33 questions — it is
 asked once more to write the final answer with the tools withheld, so the graded
 text is always an answer, never a "let me look that up" preamble.
 
-| result | closed book | with the tools |
+| metric | without MCP | with MCP |
 |---|:---:|:---:|
-| invented names / proposed names | 160 / 403 = **39.7%** | 27 / 1,064 = **2.5%** |
-| that is | 1 in 2.5 names | 1 in 40 names |
-| answers with zero invented names | 4/33 | **19/33** |
-| answers with 3+ invented names | **21/33** | **4/33** |
-| worst single answer | 18 invented | 4 invented |
+| identifiers proposed | 403 | 1,064 |
+| invented identifiers | **160 (39.7%)** | **27 (2.5%)** |
+| answers with no invented identifier | 4/33 | **19/33** |
+| completion tokens (reasoning included) | 367k | 186k |
+| total time for 33 answers | 3,241 s | 1,937 s |
 
-Cost, 33 questions at max thinking: closed book 367k completion tokens /
-3,241 s; with tools 186k / 1,937 s.
-
-The distribution separates the two runs more clearly than the average: closed
-book, 21 of 33 answers contain at least three names that do not exist, 12 of
-them contain six or more; with tools, 19 answers contain none and the worst
-contains four. Tool answers are also longer (median 6.0k vs 3.6k characters), so
-the lower count is not the result of saying less. What the tools buy is the
-absence of invented classes: `NXOpen.CAM.CAMGroupCollection` and
-`NXOpen.CAM.CAMOperationCollection` written as types (the real members are
-`CAMSetup.CAMGroupCollection` and `CAMSetup.CAMOperationCollection`, returning
-`NCGroupCollection` / `OperationCollection`), `NXOpen.CAM.BlankGeometry`
-written as a class (it is a property returning `NXOpen.CAM.Geometry`), and
-`NXOpen.CAM.CutDepth` / `NXOpen.CAM.Stepover`, which do not exist as types. The
-few names still invented with tools are mostly enum-member guesses and
-fill-in placeholders (`CutPatternOptions.Follow`, `SomeOption`).
+Inventing an API drops 16x per identifier; the per-answer count moves less —
+19/33 tool answers invent nothing vs 4/33 — because tool answers are longer
+(median 6.0k vs 3.6k characters), so they expose more names to check. What the
+tools buy is the absence of invented classes:
+`NXOpen.CAM.CAMGroupCollection` and `NXOpen.CAM.CAMOperationCollection` written as
+types (the real members are `CAMSetup.CAMGroupCollection` and
+`CAMSetup.CAMOperationCollection`, returning `NCGroupCollection` /
+`OperationCollection`), `NXOpen.CAM.BlankGeometry` written as a class (it is a
+property returning `NXOpen.CAM.Geometry`), and `NXOpen.CAM.CutDepth` /
+`NXOpen.CAM.Stepover`, which do not exist as types. The few names still invented
+with tools are mostly enum-member guesses and fill-in placeholders
+(`CutPatternOptions.Follow`, `SomeOption`).
 
 ## Demo
 
