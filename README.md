@@ -2,6 +2,8 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
+Current version 1.0.0 (not yet published to PyPI).
+
 > **Enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)
 > and the MCP component of
 > [nxopen-journal-toolkit](https://github.com/EVOL233awa/nxopen-journal-toolkit).
