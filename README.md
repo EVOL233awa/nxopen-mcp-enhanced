@@ -1,157 +1,123 @@
 # nxopen-mcp-enhanced
 
-**English** | [简体中文](README.zh-CN.md)
+[English](README.en.md) | **简体中文**
 
-Current version 1.0.0 (not yet published to PyPI).
+当前版本 1.0.0（尚未发布到 PyPI）。
 
-> **Enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)
-> and the MCP component of
-> [nxopen-journal-toolkit](https://github.com/EVOL233awa/nxopen-journal-toolkit).
+> **增强 fork**：上游为 [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)，
+> 同时是 [nxopen-journal-toolkit](https://github.com/EVOL233awa/nxopen-journal-toolkit) 的 MCP 组件。
 
-This fork can be installed **standalone** (API retrieval only), but it is **recommended to install it
-together with the [`nxopen-journal`](https://github.com/EVOL233awa/nxopen-journal) skill**: the MCP
-supplies the real NXOpen API facts, the skill supplies the NX 12 journal recipes, batch runner and
-verification gates. `nxopen-journal-toolkit` installs both and checks them together.
+本 fork 可以**单独安装**（只做 NXOpen API 检索），但**推荐与
+[`nxopen-journal`](https://github.com/EVOL233awa/nxopen-journal) 技能一起安装**：MCP 提供真实的
+NXOpen API 事实，技能提供 NX 12 journal 配方、批处理入口与产物校验门。`nxopen-journal-toolkit`
+负责把两者装在一起并统一自检。
 
-### Changes vs. upstream
+### 相对上游的改动
 
-| Area | Upstream `nxopen-mcp` 0.2.0 | This fork |
+| 方面 | 上游 `nxopen-mcp` 0.2.0 | 本 fork |
 |---|---|---|
-| Package / module / command | `nxopen-mcp` / `nxopen_mcp` / `nxopen-mcp` | `nxopen-mcp-enhanced` / `nxopen_mcp_enhanced` / `nxopen-mcp-enhanced` |
-| Default data dir | `~/.nxopen-mcp/` | `~/.nxopen-mcp-enhanced/` (coexists with upstream) |
-| Embeddings | Local BGE-M3 in-process | Local BGE-M3 **or** OpenAI-compatible remote embedding |
-| Reranking | None | Optional `/v1/rerank` (bge-reranker-v2-m3), 15 s timeout, skipped for unique names; **recommended** (+12.3 pt Recall@5) |
-| Offline behavior | Fails when the embedding service is down | Whole-name and CamelCase-token local exact fallback, notice on first line |
-| `get_class` | Full member list | Paginated `offset`/`limit` (default 200, footer shows total and next offset) |
-| Concurrency | Synchronous tool handlers | Async handlers (`asyncio.to_thread`); `get_class`/`get_member` answer while a slow search runs |
-| NX 12 XML discovery | `UGII/managed` | also `NXBIN/managed` and install root |
+| 包名 / 模块 / 命令 | `nxopen-mcp` / `nxopen_mcp` / `nxopen-mcp` | `nxopen-mcp-enhanced` / `nxopen_mcp_enhanced` / `nxopen-mcp-enhanced` |
+| 默认数据目录 | `~/.nxopen-mcp/` | `~/.nxopen-mcp-enhanced/`（可与上游共存） |
+| 嵌入 | 进程内本地 BGE-M3 | 本地 BGE-M3 **或** OpenAI 兼容远程嵌入 |
+| 重排 | 无 | 可选 `/v1/rerank`（bge-reranker-v2-m3），15 s 超时，唯一名跳过；**推荐开启**（Recall@5 +12.3 pt） |
+| 断网行为 | 嵌入服务不可用即失败 | 整串名与驼峰标识符回退本地精确匹配，首行标注 |
+| `get_class` | 一次返回全部成员 | 分页 `offset`/`limit`（默认 200，末尾给总数与下一个 offset） |
+| 并发 | 同步工具处理 | 异步（`asyncio.to_thread`）；慢查询期间 `get_class`/`get_member` 不被阻塞 |
+| NX 12 XML 发现 | `UGII/managed` | 兼查 `NXBIN/managed` 与安装根 |
 
-The local BGE-M3 retrieval path is unchanged; all additions are opt-in or backwards-compatible.
+本地 BGE-M3 检索路径未改；新增能力均可选或向后兼容。
 
-MCP server that gives AI coding agents (Claude Code, Codex, Cursor)
-accurate knowledge of the Siemens NXOpen .NET API — eliminating
-hallucinated API calls via hybrid retrieval over your own NX installation's
-official documentation.
+## 为什么需要它
 
-## Why
+LLM 会编造 NXOpen API：这是西门子 NX CAM/CAD 自动化的窄领域，公开训练数据少，模型会自信地
+写出不存在的类、方法与参数。本 MCP 用你自己 NX 安装里的官方文档做检索，而不是靠记忆：
 
-LLMs hallucinate NXOpen APIs: it's a niche domain (Siemens NX CAM/CAD
-automation) with sparse public training data, so models confidently invent
-classes, methods, and parameters that don't exist. This server grounds
-agents in the real docs instead of guesses:
+- **语义检索**（BGE-M3 dense 向量）：中英文自然语言查询也能找到 API。
+- **精确名通道**：查询里的 CamelCase 名字（如 `CavityMillingBuilder`）直接查库并置顶（类型优先），
+  不交给近似匹配。
+- **可选重排**：对前若干候选重新排序，评测显示这是更值得开的配置（见下文“评测”）。
 
-- **Semantic search** (BGE-M3 embeddings) so natural-language
-  queries in English or 中文 find the right API even without exact names.
-- **Exact-name channel**: a literal CamelCase name in your query (e.g.
-  `CavityMillingBuilder`) is looked up directly and pinned to the top
-  (types first) — never left to approximate matching.
-- **Optional reranking** of the top candidates, which is what the evaluation
-  recommends (see [Evaluation](#evaluation)).
+默认全程本地、离线，索引由本机授权的 NX 安装构建，不附带、不上传任何 Siemens 文件。推荐的
+部署再加一个外部嵌入/重排服务（见“远程嵌入与重排”），开启后只有查询与文档文本离开本机。
 
-The default is fully local and offline against an index built from your own
-licensed NX installation — no Siemens files are bundled or sent anywhere. The
-recommended setup then adds a remote embedding/rerank provider
-(see [Remote embedding and reranking](#remote-embedding-and-reranking-recommended));
-when it is enabled, only query and document text leaves the machine.
+## 快速开始
 
-## Quick start
-
-Requires **Python 3.11+**.
+需要 **Python 3.11+**。
 
 ```bash
-# 1. Install from this repository (not on PyPI yet)
+# 1. 从本仓库安装（尚未发布到 PyPI）
 git clone https://github.com/EVOL233awa/nxopen-mcp-enhanced
 cd nxopen-mcp-enhanced
-# Recommended: remote embeddings + reranking. SiliconFlow serves BAAI/bge-m3 and
-#   BAAI/bge-reranker-v2-m3 for free, so nothing is downloaded. Set the
-#   NXOPEN_MCP_* variables first (see "Remote embedding and reranking").
+# 推荐：远程嵌入 + 重排（硅基流动的 BAAI/bge-m3 与 BAAI/bge-reranker-v2-m3 免费，
+#   不下载模型）；先按“远程嵌入与重排”一节设好 NXOPEN_MCP_*，再建索引
 pip install -e ".[reflect]"
-# Or fully local and offline: downloads ~2 GB BGE-M3 on first use
+# 或全程本地、离线：首次使用下载约 2 GB 的 BGE-M3
 # pip install -e ".[embed,reflect]"
 
-# 2. Build the index from YOUR NX installation (one-time — see time note below)
+# 2. 用你的 NX 安装目录建一次索引
 nxopen-mcp-enhanced index --nx-path "D:\Siemens\NX12.0"
 
-# 3. Register with Claude Code (user scope: available in every project)
+# 3. 注册到 Claude Code（用户级，所有项目可用）
 claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve
 
-# 4. Ask Claude Code to write NXOpen code — it now queries real APIs.
+# 4. 让 agent 写 NXOpen 代码，它会先查真实 API。
 ```
 
-If you use `nxopen-journal-toolkit`, `nxjt install` performs steps 1 and 3 for you and
-`nxjt index` performs step 2; the manual commands above are the standalone path.
+用 `nxopen-journal-toolkit` 时，`nxjt install` 完成第 1、3 步，`nxjt index` 完成第 2 步；上面的
+手工命令是单独安装路线。
 
-`index` looks for `NXOpen*.xml` doc files under `<nx-path>\UGII\managed`, then
-`<nx-path>\NXBIN\managed`, then `<nx-path>` itself, and for `NXOpen*.dll`
-assemblies in the same folders.
+`index` 依次在 `<nx-path>\UGII\managed`、`<nx-path>\NXBIN\managed`、`<nx-path>` 下找
+`NXOpen*.xml`，并在同一批目录找 `NXOpen*.dll`。
 
-Extras: `[embed]` pulls in `FlagEmbedding` (downloads the ~2GB BGE-M3
-model on first use) — needed only for the local embedding path.
-`[reflect]` pulls in `pythonnet` so `get_class` can show inherited
-members; skip it and indexing still works, just without inheritance
-chains.
+可选依赖：`[embed]` 拉入 `FlagEmbedding`（约 2 GB 模型，只有本地嵌入路线才需要）；`[reflect]`
+拉入 `pythonnet`，`get_class` 才能显示继承链；不装也能建索引，只是没有继承成员。
 
-**How long does indexing take?** A full NX 12 doc set is ~100k members. Local
-embedding is memory-bandwidth-bound, so it takes hours; `--workers N` helps
-mostly on machines with more memory channels, and a CUDA GPU helps a lot. With
-a remote embedding service the wall time follows the provider's rate limit and
-`--workers N` submits batches concurrently.
+**建索引要多久？** 全量 NX 12 文档约 10 万成员。本地嵌入受内存带宽限制，耗时以小时计；
+远程嵌入取决于服务端限速与网络，`--workers` 并发提交批次。
 
-**First semantic query is slow by design (local path).** `serve` starts instantly, and
-`get_class` / `get_member` respond immediately, but the first
-`search_api` / `find_builder` call loads the BGE-M3 model. After that, semantic
-queries take seconds. If your MCP client shows the first search "hanging", it's
-the one-time model load — let it finish. The remote path has no load step.
+**首次语义查询慢是设计行为（本地嵌入路线）。** `serve` 立即启动，`get_class` / `get_member`
+立即响应；第一次 `search_api` / `find_builder` 要加载 BGE-M3。客户端看起来“卡住”时，等它
+加载完。远程嵌入路线没有这一步。
 
-By default the index is written to `~/.nxopen-mcp-enhanced/index.db`; override with
-`--db <path>` on both `index` and `serve`.
+默认索引在 `~/.nxopen-mcp-enhanced/index.db`；`index` 与 `serve` 都可用 `--db <path>` 覆盖。
 
-## Remote embedding and reranking (recommended)
+## 远程嵌入与重排（推荐）
 
-**SiliconFlow is the recommended provider**: it serves `BAAI/bge-m3` (1024-dim
-embeddings) and `BAAI/bge-reranker-v2-m3` (reranking) as free models on its
-official pricing page — the same two models this fork defaults to, so retrieval
-quality is unchanged while the local model and its compute disappear. The free
-tier has fixed rate limits and requires identity verification; the `Pro/`
-variants of the same models are paid fast tiers. Check the
-[pricing page](https://siliconflow.cn/pricing) and your console for current
-terms.
+**推荐接入硅基流动**：它的 `BAAI/bge-m3`（嵌入，1024 维）与 `BAAI/bge-reranker-v2-m3`（重排）
+在官方价格页标为免费，与本 fork 的默认模型完全一致，所以检索质量不变、只省掉本地模型与算力。
+免费档有固定 Rate Limits、需要实名认证，`Pro/` 前缀的同名模型是收费加速档；价格与限速以
+[价格页](https://siliconflow.cn/pricing)与控制台为准。
 
-The remote path installs no `[embed]` extra and downloads no model. Set these
-before `index` and `serve`:
+远程路线不装 `[embed]`、不下载任何模型，在 `index` 与 `serve` 前设置：
 
-| Variable | Example |
+| 变量 | 示例 |
 |---|---|
 | `NXOPEN_MCP_EMBEDDER` | `remote` |
 | `NXOPEN_MCP_EMBED_URL` | `https://api.siliconflow.cn` |
 | `NXOPEN_MCP_EMBED_MODEL` | `BAAI/bge-m3` |
-| `NXOPEN_MCP_EMBED_API_KEY` | your bearer token |
-| `NXOPEN_MCP_RERANK` | `1` to enable reranking |
+| `NXOPEN_MCP_EMBED_API_KEY` | 你的 bearer token |
+| `NXOPEN_MCP_RERANK` | `1` 开启重排 |
 | `NXOPEN_MCP_RERANK_URL` | `https://api.siliconflow.cn/v1/rerank` |
 | `NXOPEN_MCP_RERANK_MODEL` | `BAAI/bge-reranker-v2-m3` |
-| `NXOPEN_MCP_RERANK_API_KEY` | your bearer token |
+| `NXOPEN_MCP_RERANK_API_KEY` | 你的 bearer token |
 
-Any OpenAI-compatible embedding service accepts the same variables (Ollama uses
-`NXOPEN_MCP_EMBEDDER=ollama`). `index` and `serve` must use the **same** settings:
-the vectors in the index come from whichever model built it, so switching models
-means rebuilding the index.
+任何 OpenAI 兼容的嵌入服务都可以填这一组变量（Ollama 走 `NXOPEN_MCP_EMBEDDER=ollama`）。
+`index` 与 `serve` 必须用同一组变量：索引里的向量是用建索引时的模型产生的，换模型要重建索引。
 
-Behavior:
-- Reranking only reorders the first 20 candidates; it has a 15 s timeout and falls
-  back to the unranked order on any error.
-- Unique exact names (`ExtrudeBuilder`) skip reranking; ambiguous short names
-  (`Tag`, `Validate`) and natural-language queries keep it.
-- If the embedding service is unreachable, the whole query is tried as a literal
-  name (`Part`, `Session`, `NXOpen.Features.ExtrudeBuilder`) and CamelCase tokens
-  inside it fall back to local exact matches, with a notice on the first line;
-  other queries fail. `get_class` / `get_member` never wait on the embedding
-  service and answer while a slow semantic call is in flight.
+行为：
 
-If `nxopen-mcp-enhanced` isn't on your PATH (e.g. installed into a venv), use the
-full path to the executable (Windows: `<venv>\Scripts\nxopen-mcp-enhanced.exe`)
-in the commands and configs below.
+- 重排只重排前 20 个候选，15 s 超时，任何错误回退到未重排顺序。
+- 唯一精确名（`ExtrudeBuilder`）跳过重排；歧义短名（`Tag`、`Validate`）与自然语言查询保留重排。
+- 嵌入服务不可达时，整串名（`Part`、`Session`、`NXOpen.Features.ExtrudeBuilder`）与查询中的
+  CamelCase token 回退本地精确匹配，并在首行标注；其他查询报错。`get_class` / `get_member`
+  不等待嵌入服务，慢语义查询进行中也能回答。
+- 用 `nxopen-journal-toolkit` 时，`nxjt config embed --provider remote` 会把这些变量写进
+  MCP 客户端配置（各宿主格式不同），`nxjt index` 沿用同一组变量。
 
-### `.mcp.json` (Claude Code / other MCP-aware clients)
+如果 `nxopen-mcp-enhanced` 不在 PATH（例如装在 venv），命令与配置里用完整可执行文件路径
+（Windows：`<venv>\Scripts\nxopen-mcp-enhanced.exe`）。
+
+### Claude Code / 通用 MCP 客户端
 
 ```json
 {
@@ -164,7 +130,7 @@ in the commands and configs below.
 }
 ```
 
-If you built the index at a non-default path, pass it explicitly:
+索引不在默认路径时显式传：
 
 ```json
 {
@@ -179,9 +145,7 @@ If you built the index at a non-default path, pass it explicitly:
 
 ### Codex
 
-Codex CLI reads MCP servers from `~/.codex/config.toml`
-(Windows: `C:\Users\<you>\.codex\config.toml`; create the file if it
-doesn't exist). Add:
+Codex 从 `~/.codex/config.toml`（Windows：`C:\Users\<you>\.codex\config.toml`）读 MCP：
 
 ```toml
 [mcp_servers.nxopen]
@@ -189,178 +153,126 @@ command = "nxopen-mcp-enhanced"
 args = ["serve"]
 ```
 
-If `nxopen-mcp-enhanced` isn't on PATH, use the full executable path (double the
-backslashes on Windows):
-
-```toml
-[mcp_servers.nxopen]
-command = "D:\\path\\to\\venv\\Scripts\\nxopen-mcp-enhanced.exe"
-args = ["serve", "--db", "D:\\path\\to\\index.db"]
-```
-
-Alternatively, one CLI command does the same thing:
-
-```bash
-codex mcp add nxopen -- nxopen-mcp-enhanced serve
-```
-
-Restart Codex, then verify with `codex mcp list` (or just ask it to look
-up an NXOpen class — you'll see the `nxopen` tool calls). On the local
-embedding path the same first-semantic-query model load applies here.
+或用一条命令：`codex mcp add nxopen -- nxopen-mcp-enhanced serve`。重启 Codex 后用
+`codex mcp list` 确认。
 
 ### Cursor
 
-Add the same JSON block as `.mcp.json` above to Cursor's MCP settings
-(project `.cursor/mcp.json`, or global via Settings → MCP).
+把上面的 JSON 块加到 Cursor 的 MCP 设置（项目 `.cursor/mcp.json` 或 Settings → MCP）。
 
-## Tools
+## 工具
 
-| tool | purpose |
+| 工具 | 用途 |
 |---|---|
-| `search_api` | Hybrid semantic search over the API (dense + exact-name by default, sparse optional). Accepts English or 中文 queries; use when you don't know the exact class/member name. |
-| `get_class` | Member list for a class, including inherited members. Paginated: `offset` / `limit` (default 200), the footer shows the total and the next offset. Use when you know the class name. |
-| `get_member` | Exact signature, parameters, return value, NX version, and license requirement for one member. |
-| `find_builder` | Given a CAM operation name (e.g. "cavity milling", "hole drilling"), finds the matching `*Builder` class, its creator method, and a Builder → Commit → Destroy code skeleton. |
+| `search_api` | API 混合语义检索（默认 dense + 精确名；sparse 可选）。接受英文或中文；不知道确切类名/成员名时用。 |
+| `get_class` | 类的成员列表（含继承链）。分页 `offset` / `limit`（默认 200），末尾显示总数与下一个 offset。知道类名时用。 |
+| `get_member` | 单个成员的精确签名、参数、返回、NX 版本与 license。 |
+| `find_builder` | 由 CAM 工序名（如 “cavity milling”、“hole drilling”）找对应 `*Builder`、创建方法与 Builder → Commit → Destroy 骨架。 |
 
-## Architecture
+## 架构
 
+```text
+NXOpen*.xml / *.dll（你的 NX 安装）
+        │
+        ▼
+  indexer/parser.py        一条 XML 文档注释 -> 一条 MemberRecord
+  indexer/inheritance.py   可选：反射 DLL（pythonnet）取基类链
+        │
+        ▼
+  indexer/embedder.py      每条记录：BGE-M3 dense 向量 + sparse token 权重
+        │
+        ▼
+  indexer/build.py         写入 members / dense_vec（sqlite-vec）/ sparse_postings
+        │                  单个 SQLite 文件（index.db）
+        ▼
+  retrieval/store.py       精确名查询、类/成员/继承查询
+  retrieval/hybrid.py      dense ANN + 精确 CamelCase（默认），可选 sparse，RRF 融合，可选重排
+        │
+        ▼
+  server.py                4 个 MCP 工具（FastMCP，stdio）
+  cli.py                   `nxopen-mcp-enhanced index` / `serve`
 ```
-NXOpen*.xml / *.dll  (your NX install)
-        │
-        ▼
-  indexer/parser.py        one XML doc-comment member -> one MemberRecord
-  indexer/inheritance.py   optional: reflect DLLs (pythonnet) for base-class chains
-        │
-        ▼
-  indexer/embedder.py      BGE-M3 dense vector + sparse token weights per record
-        │
-        ▼
-  indexer/build.py         writes members, dense_vec (sqlite-vec), sparse_postings
-        │                  into a single SQLite file (index.db)
-        ▼
-  retrieval/store.py       exact-name lookup, class/member/inheritance queries
-  retrieval/hybrid.py      dense ANN + exact CamelCase match (default),
-                           optional sparse channel, RRF fusion, optional rerank
-        │
-        ▼
-  server.py                4 MCP tools (FastMCP, stdio transport)
-  cli.py                   `nxopen-mcp-enhanced index` / `nxopen-mcp-enhanced serve`
-```
 
-Design decisions:
+设计取舍：
 
-- **BYO-Docs licensing.** This repository contains no Siemens XML/DLL
-  files. Users point `nxopen-mcp-enhanced index` at their own licensed NX
-  installation; the resulting index is a local SQLite file that never
-  leaves the machine and is never committed (see `.gitignore`).
-- **One-member-one-chunk.** Each indexed unit is a single API member
-  (type, property, method, field, or event) rather than an arbitrary text
-  window, so retrieval results map 1:1 onto something an agent can act on
-  (a class, a method signature) instead of a fragment of a doc page.
-- **RRF fusion, not score blending.** When the sparse channel is enabled,
-  dense and sparse rankings are combined with Reciprocal Rank Fusion,
-  which is scale-free and doesn't require calibrating dense-vs-sparse
-  score magnitudes against each other (the evaluated default runs
-  dense + exact only).
-  Exact CamelCase name matches are promoted ahead of the fused list
-  outright, since a literal name in the query is a much stronger signal
-  than similarity.
-- **Inheritance via reflection, with graceful degradation.** Ancestor
-  chains (needed by `get_class` to show inherited members) are extracted
-  by reflecting the NXOpen DLLs with `pythonnet` (`[reflect]` extra) at
-  index time. If the extra isn't installed or DLLs aren't found alongside
-  the XML docs, indexing still succeeds — `get_class` simply has no
-  inherited members to show.
+- **文档自带（BYO-Docs）**：仓库不含 Siemens XML/DLL；索引由用户本机授权的 NX 文档构建，
+  是本地 SQLite 文件，不上传、不入库。
+- **一成员一 chunk**：每条索引是一个 API 成员（类型/属性/方法/字段/事件），检索结果能 1:1
+  对应到 agent 可执行的对象，而不是文档页的文本片段。
+- **RRF 而非分数混合**：启用 sparse 通道时用 Reciprocal Rank Fusion 合并排序，无需校准
+  dense 与 sparse 的分数量纲；默认只跑 dense + exact，精确名匹配直接提到融合列表之前。
+- **继承靠反射，可降级**：`get_class` 的继承链在建索引时用 `pythonnet` 反射 DLL 得到
+  （`[reflect]`）；没装或找不到 DLL 也能建索引，只是没有继承成员。
 
-## Evaluation
+## 评测
 
-Measured on a real index built from an NX 12 installation (95,807 API
-members) against a 73-query golden set (`eval/golden.jsonl`, mixed
-English / Traditional Chinese, four query styles — semantic description,
-exact class name, member lookup, builder idiom — spanning CAM, Features,
-Sketch, Assemblies, Drawings, UF, and BlockStyler):
+在真实 NX 12 索引（95,807 个 API 成员）与 73 条 golden query 上测（`eval/golden.jsonl`，
+英文/繁体中文混合，四种查询类型：语义描述、精确类名、成员查找、builder 惯用法；覆盖 CAM、
+Features、Sketch、Assemblies、Drawings、UF、BlockStyler）：
 
 ```bash
 python eval/run_eval.py --db ~/.nxopen-mcp-enhanced/index.db
 ```
 
-Remote `BAAI/bge-m3` embeddings + `BAAI/bge-reranker-v2-m3` reranking, same index,
-same queries:
+远程 `BAAI/bge-m3` 嵌入 + `BAAI/bge-reranker-v2-m3` 重排，同一索引、同一批查询：
 
-| config | Recall@5 | Recall@10 | MRR |
+| 配置 | Recall@5 | Recall@10 | MRR |
 |---|---|---|---|
 | dense-only | 56.16% | 67.12% | 0.411 |
 | **dense+exact** | 57.53% | 67.12% | 0.437 |
-| **dense+exact+rerank (recommended)** | **69.86%** | **78.08%** | **0.531** |
+| **dense+exact+rerank（推荐）** | **69.86%** | **78.08%** | **0.531** |
 
-The exact-name channel guarantees that a literal class/member name is surfaced,
-and reranking reorders the first 20 candidates; together they lift Recall@5 by
-13.7 pt over dense alone. The remote embedder returns no sparse lexical weights,
-so there is no sparse row here; the local BGE-M3 path can still enable that
-channel via the `channels` parameter of `search()`.
+精确名通道保证字面类名/成员名命中，重排把前 20 个候选重新排序；两者叠加比纯 dense 的
+Recall@5 高 13.7 pt。远程嵌入不提供 sparse 词权重，因此表内不含 sparse 行；本地 BGE-M3
+路线可用 `search()` 的 `channels` 参数启用。
 
-Per query, reranking improved 11, worsened 2, left 60 unchanged. Both
-regressions are "Chinese verb + English noun" queries (`取得零件的 CAM setup
-物件`, `create hole feature 建立孔特徵`), where reranking down-weights the literal
-API name.
+逐查询：重排改善 11、变差 2、不变 60。两条变差的都是“中文动词 + 英文名词”结构
+（`取得零件的 CAM setup 物件`、`create hole feature 建立孔特徵`），重排压低了 API 字面名的分量。
 
-Two further effects matter in practice:
+另有两件实际相关的事：
 
-- The index does **not** need rebuilding when switching between local BGE-M3
-  and the same model served remotely: the vectors agree to cosine 0.99988–0.99994,
-  and a 2,000-member re-embedding kept 97.1% of the golden set's top-10
-  identical (the residual is batching float noise, batch 1 vs 128 included).
-- Plain 2–4 character Chinese queries with no English term still miss
-  (`拉伸` returns `RelaxationLength`); add the English term
-  (`创建拉伸特征 extrusion`) or use `get_class` / `get_member` by name.
+- 本地 BGE-M3 与云端同名模型之间**不需要重建索引**：向量余弦 0.99988–0.99994，2,000 条重编码后
+  73 条 golden 的 top-10 重合 97.1%（其余是 batch=1 与 batch=128 的浮点噪声）。
+- 纯中文 2–4 字查询仍会失手（`拉伸` 查到 `RelaxationLength`）；补上英文术语
+  （`创建拉伸特征 extrusion`），或按名走 `get_class` / `get_member`。
 
-### Hallucination test: closed book vs. with the tools
+### 幻觉测试：闭卷 vs. 带工具
 
-Same model (`deepseek-v4.1-flash-1017`, max thinking), same 33 golden
-questions, one variable: whether the four tools are reachable over MCP function
-calling.
+同一模型（`deepseek-v4.1-flash-1017`，max 思考深度）、同一组 33 条 golden 问题，唯一变量是
+四个工具能否通过 MCP 函数调用拿到。
 
-Grading is mechanical, so it can be re-run: every identifier in an answer
-(`NXOpen.*` dotted paths, plus CamelCase tokens with 3+ humps that the answer
-does not declare itself) is checked against NXOpen reflection — `NXOpen.dll`,
-`NXOpen.Utilities.dll` and `NXOpen.UF.dll` — accepting `type.member` and
-property chains such as `NXOpen.Session.Parts.Work.CAMSetup`. The oracle is
-calibrated before grading: 14 known-real names (enum values included) must be
-accepted and 7 known-fake names rejected, or the run aborts.
+判分是机械的，可复跑：答案里每个标识符（`NXOpen.*` 点路径，加上答案自己未声明的三段式以上
+驼峰名）都拿到 NXOpen 反射里核对——`NXOpen.dll`、`NXOpen.Utilities.dll`、`NXOpen.UF.dll`，
+接受 `类型.成员` 以及 `NXOpen.Session.Parts.Work.CAMSetup` 这类属性链。判据先自校准：
+14 个已知真实名（含枚举值）必须被接受、7 个已知假名必须被拒绝，否则本次统计作废。
 
 ```bash
-python eval/halluc_test.py collect --out answers.jsonl   # asks the model
-python eval/halluc_test.py grade --answers answers.jsonl # reflection only
+python eval/halluc_test.py collect --out answers.jsonl   # 问模型
+python eval/halluc_test.py grade --answers answers.jsonl # 只用反射判分
 ```
 
-| metric | without MCP | with MCP |
+| 指标 | 无 MCP | 有 MCP |
 |---|:---:|:---:|
-| exactly correct | 4/33 (12.1%) | **19/33 (57.6%)** |
-| hallucinated (API does not exist) | **29/33 (87.9%)** | 14/33 (42.4%) |
-| total time | 3,241 s | 1,937 s |
-| total tokens consumed (completion, reasoning included) | 367k | 186k |
+| 完全正确 | 4/33（12.1%） | **19/33（57.6%）** |
+| 幻觉（API 不存在） | **29/33（87.9%）** | 14/33（42.4%） |
+| 总耗时 | 3241 s | 1937 s |
+| 总消耗 token（完成侧，含思考） | 367k | 186k |
 
-## Demo
+## 演示
 
-![Claude Code querying the real NXOpen API through nxopen-mcp-enhanced](https://raw.githubusercontent.com/EVOL233awa/nxopen-mcp-enhanced/master/docs/demo.gif)
+![Claude Code 通过 nxopen-mcp-enhanced 查询真实 NXOpen API](https://raw.githubusercontent.com/EVOL233awa/nxopen-mcp-enhanced/master/docs/demo.gif)
 
-A real session: asked to write NXOpen code that sets the spindle speed,
-Claude Code calls `search_api` (semantic search, English or Chinese) and
-`get_class` (members + inheritance chain), then writes code in which every
-member — `FeedsBuilder`, `SpindleRpmToggle`, `SpindleRpmBuilder.Value` —
-exists in the real API, with NX version info to prove it.
+一次真实会话：让 Claude Code 写设置主轴转速的 NXOpen 代码，它调用 `search_api`（语义检索，
+中英文均可）与 `get_class`（成员 + 继承链），最后写出的每个成员——`FeedsBuilder`、
+`SpindleRpmToggle`、`SpindleRpmBuilder.Value`——都在真实 API 中存在，并带 NX 版本信息。
 
-## Index licensing
+## 索引许可边界
 
-The index embeds text from Siemens' API documentation. Building it locally from
-your own licensed NX installation is what `nxopen-mcp-enhanced index` does; use
-such an index only within an organization whose seats are licensed for NX. Do
-**not** redistribute index files publicly — anyone outside your license should
-build their own.
+索引内嵌了 Siemens API 文档文本。用本机授权的 NX 安装构建索引是 `nxopen-mcp-enhanced index`
+做的事；这样的索引只在持有 NX 授权的组织内部使用。**不要公开分发索引文件**，授权范围外的
+用户应自行构建。
 
-## License & IP
+## 许可与知识产权
 
-Code: MIT (see [LICENSE](LICENSE)). This repository contains **no**
-Siemens files — no NXOpen XML docs, no DLLs. The index is built locally
-from your own licensed NX installation's documentation via
-`nxopen-mcp-enhanced index` and never leaves your machine.
+代码 MIT（见 [LICENSE](LICENSE)）。仓库不含任何 Siemens 文件——没有 NXOpen XML，也没有 DLL。
+索引由本机授权的 NX 安装文档在本地构建，不离开本机。
