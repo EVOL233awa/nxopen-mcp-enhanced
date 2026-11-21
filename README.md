@@ -2,7 +2,7 @@
 
 [English](README.en.md) | **简体中文**
 
-当前版本 1.0.0（尚未发布到 PyPI）。
+当前版本 1.0.0（从 GitHub Release 安装，未发布到 PyPI）。
 
 > **增强 fork**：上游为 [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)，
 > 同时是 [nxopen-journal-toolkit](https://github.com/EVOL233awa/nxopen-journal-toolkit) 的 MCP 组件。
@@ -45,14 +45,10 @@ LLM 会编造 NXOpen API：这是西门子 NX CAM/CAD 自动化的窄领域，�
 需要 **Python 3.11+**。
 
 ```bash
-# 1. 从本仓库安装（尚未发布到 PyPI）
-git clone https://github.com/EVOL233awa/nxopen-mcp-enhanced
-cd nxopen-mcp-enhanced
-# 推荐：远程嵌入 + 重排（硅基流动的 BAAI/bge-m3 与 BAAI/bge-reranker-v2-m3 免费，
-#   不下载模型）；先按“远程嵌入与重排”一节设好 NXOPEN_MCP_*，再建索引
-pip install -e ".[reflect]"
-# 或全程本地、离线：首次使用下载约 2 GB 的 BGE-M3
-# pip install -e ".[embed,reflect]"
+# 1. 从 GitHub Release 安装（未发布到 PyPI）
+pip install https://github.com/EVOL233awa/nxopen-mcp-enhanced/releases/download/v1.0.0/nxopen_mcp_enhanced-1.0.0-py3-none-any.whl
+# 可选：pythonnet 让 get_class 显示继承链；本地嵌入路线另装 FlagEmbedding（首次约 2 GB 模型）
+pip install pythonnet
 
 # 2. 用你的 NX 安装目录建一次索引
 nxopen-mcp-enhanced index --nx-path "D:\Siemens\NX12.0"
@@ -69,8 +65,14 @@ claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve
 `index` 依次在 `<nx-path>\UGII\managed`、`<nx-path>\NXBIN\managed`、`<nx-path>` 下找
 `NXOpen*.xml`，并在同一批目录找 `NXOpen*.dll`。
 
-可选依赖：`[embed]` 拉入 `FlagEmbedding`（约 2 GB 模型，只有本地嵌入路线才需要）；`[reflect]`
-拉入 `pythonnet`，`get_class` 才能显示继承链；不装也能建索引，只是没有继承成员。
+可选依赖：本地嵌入路线另装 `FlagEmbedding`（约 2 GB 模型）；`pythonnet` 让 `get_class` 显示继承链；
+不装也能建索引，只是没有继承成员。从源码安装（开发）时可用 extras：
+
+```bash
+git clone https://github.com/EVOL233awa/nxopen-mcp-enhanced
+cd nxopen-mcp-enhanced
+pip install -e ".[reflect]"        # 本地嵌入路线用 ".[embed,reflect]"
+```
 
 **建索引要多久？** 全量 NX 12 文档约 10 万成员。本地嵌入受内存带宽限制，耗时以小时计；
 远程嵌入取决于服务端限速与网络，`--workers` 并发提交批次。
@@ -88,7 +90,7 @@ claude mcp add -s user nxopen -- nxopen-mcp-enhanced serve
 免费档有固定 Rate Limits、需要实名认证，`Pro/` 前缀的同名模型是收费加速档；价格与限速以
 [价格页](https://siliconflow.cn/pricing)与控制台为准。
 
-远程路线不装 `[embed]`、不下载任何模型，在 `index` 与 `serve` 前设置：
+远程路线不装 `FlagEmbedding`、不下载任何模型，在 `index` 与 `serve` 前设置：
 
 | 变量 | 示例 |
 |---|---|
@@ -201,8 +203,8 @@ NXOpen*.xml / *.dll（你的 NX 安装）
   对应到 agent 可执行的对象，而不是文档页的文本片段。
 - **RRF 而非分数混合**：启用 sparse 通道时用 Reciprocal Rank Fusion 合并排序，无需校准
   dense 与 sparse 的分数量纲；默认只跑 dense + exact，精确名匹配直接提到融合列表之前。
-- **继承靠反射，可降级**：`get_class` 的继承链在建索引时用 `pythonnet` 反射 DLL 得到
-  （`[reflect]`）；没装或找不到 DLL 也能建索引，只是没有继承成员。
+- **继承靠反射，可降级**：`get_class` 的继承链在建索引时用 `pythonnet` 反射 DLL 得到；
+  没装或找不到 DLL 也能建索引，只是没有继承成员。
 
 ## 评测
 

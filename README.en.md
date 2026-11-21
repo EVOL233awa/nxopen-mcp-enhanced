@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.md)
 
-Current version 1.0.0 (not yet published to PyPI).
+Current version 1.0.0 (install from GitHub Releases; not yet published to PyPI).
 
 > **Enhanced fork** of [mingfeng6684/nxopen-mcp](https://github.com/mingfeng6684/nxopen-mcp)
 > and the MCP component of
@@ -59,15 +59,11 @@ when it is enabled, only query and document text leaves the machine.
 Requires **Python 3.11+**.
 
 ```bash
-# 1. Install from this repository (not on PyPI yet)
-git clone https://github.com/EVOL233awa/nxopen-mcp-enhanced
-cd nxopen-mcp-enhanced
-# Recommended: remote embeddings + reranking. SiliconFlow serves BAAI/bge-m3 and
-#   BAAI/bge-reranker-v2-m3 for free, so nothing is downloaded. Set the
-#   NXOPEN_MCP_* variables first (see "Remote embedding and reranking").
-pip install -e ".[reflect]"
-# Or fully local and offline: downloads ~2 GB BGE-M3 on first use
-# pip install -e ".[embed,reflect]"
+# 1. Install from GitHub Releases (not on PyPI yet)
+pip install https://github.com/EVOL233awa/nxopen-mcp-enhanced/releases/download/v1.0.0/nxopen_mcp_enhanced-1.0.0-py3-none-any.whl
+# Optional: pythonnet lets get_class show inherited members; the local embedding path
+# also needs FlagEmbedding (~2 GB of models on first use)
+pip install pythonnet
 
 # 2. Build the index from YOUR NX installation (one-time — see time note below)
 nxopen-mcp-enhanced index --nx-path "D:\Siemens\NX12.0"
@@ -85,11 +81,15 @@ If you use `nxopen-journal-toolkit`, `nxjt install` performs steps 1 and 3 for y
 `<nx-path>\NXBIN\managed`, then `<nx-path>` itself, and for `NXOpen*.dll`
 assemblies in the same folders.
 
-Extras: `[embed]` pulls in `FlagEmbedding` (downloads the ~2GB BGE-M3
-model on first use) — needed only for the local embedding path.
-`[reflect]` pulls in `pythonnet` so `get_class` can show inherited
-members; skip it and indexing still works, just without inheritance
-chains.
+Optional dependencies: the local embedding path needs `FlagEmbedding` (~2 GB of models on first
+use); `pythonnet` lets `get_class` show inherited members, and indexing still works without it, just
+without inheritance chains. Installing from source (development) keeps the extras:
+
+```bash
+git clone https://github.com/EVOL233awa/nxopen-mcp-enhanced
+cd nxopen-mcp-enhanced
+pip install -e ".[reflect]"        # use ".[embed,reflect]" for local embeddings
+```
 
 **How long does indexing take?** A full NX 12 doc set is ~100k members. Local
 embedding is memory-bandwidth-bound, so it takes hours; `--workers N` helps
@@ -117,7 +117,7 @@ variants of the same models are paid fast tiers. Check the
 [pricing page](https://siliconflow.cn/pricing) and your console for current
 terms.
 
-The remote path installs no `[embed]` extra and downloads no model. Set these
+The remote path installs no `FlagEmbedding` and downloads no model. Set these
 before `index` and `serve`:
 
 | Variable | Example |
@@ -267,8 +267,8 @@ Design decisions:
   than similarity.
 - **Inheritance via reflection, with graceful degradation.** Ancestor
   chains (needed by `get_class` to show inherited members) are extracted
-  by reflecting the NXOpen DLLs with `pythonnet` (`[reflect]` extra) at
-  index time. If the extra isn't installed or DLLs aren't found alongside
+  by reflecting the NXOpen DLLs with `pythonnet` at
+  index time. If pythonnet isn't installed or DLLs aren't found alongside
   the XML docs, indexing still succeeds — `get_class` simply has no
   inherited members to show.
 
