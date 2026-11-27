@@ -5,6 +5,9 @@ description = "Enhanced fork of nxopen-mcp: NXOpen .NET API retrieval with remot
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
+authors = [
+    { name = "EVOL233awa", email = "89311835+EVOL233awa@users.noreply.github.com" },
+]
 keywords = ["mcp", "nxopen", "siemens-nx", "rag", "llm", "cam"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -29,6 +32,7 @@ dev = ["pytest>=8.0"]
 [project.urls]
 Upstream = "https://github.com/mingfeng6684/nxopen-mcp"
 Repository = "https://github.com/EVOL233awa/nxopen-mcp-enhanced"
+Issues = "https://github.com/EVOL233awa/nxopen-mcp-enhanced/issues"
 Toolkit = "https://github.com/EVOL233awa/nxopen-journal-toolkit"
 
 [project.scripts]
