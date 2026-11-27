@@ -1,10 +1,10 @@
 [project]
 name = "nxopen-mcp-enhanced"
-version = "1.0.0"
+version = "1.0.1"
 description = "Enhanced fork of nxopen-mcp: NXOpen .NET API retrieval with remote embedding, optional reranking and offline-safe fallbacks"
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE", "TRADEMARK.md"]
 authors = [
     { name = "EVOL233awa", email = "89311835+EVOL233awa@users.noreply.github.com" },
 ]

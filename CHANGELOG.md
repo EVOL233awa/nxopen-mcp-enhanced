@@ -4,7 +4,9 @@
 
 格式遵循 [Keep a Changelog 2.0.0](https://keepachangelog.com/zh-CN/2.0.0/)，版本号遵循 [Semantic Versioning 2.0.0](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [1.0.1] - 2026-11-28
+
+修复 CLI 与新版 click 的兼容性。
 
 ### Changed
 
@@ -40,4 +42,5 @@
 - 离线回退：单字名同样走本地精确匹配。
 - 慢查询期间 `get_class` / `get_member` 不再被阻塞。
 
+[1.0.1]: https://github.com/EVOL233awa/nxopen-mcp-enhanced/releases/tag/v1.0.1
 [1.0.0]: https://github.com/EVOL233awa/nxopen-mcp-enhanced/releases/tag/v1.0.0

@@ -4,7 +4,7 @@
 
 让 agent 查真实的 NXOpen .NET API，而不是编造类名与签名。
 
-`NX 12 docs` · `Python 3.11+` · `MCP stdio` · `v1.0.0` · `MIT`
+`NX 12 docs` · `Python 3.11+` · `MCP stdio` · `v1.0.1` · `MIT`
 
 ## 目录
 
@@ -113,7 +113,7 @@ nxopen-mcp-enhanced/
 
 步骤：
 1. 安装本包（未发布到 PyPI，从 GitHub Release 安装）：
-   python -m pip install https://github.com/EVOL233awa/nxopen-mcp-enhanced/releases/download/v1.0.0/nxopen_mcp_enhanced-1.0.0-py3-none-any.whl
+   python -m pip install https://github.com/EVOL233awa/nxopen-mcp-enhanced/releases/download/v1.0.1/nxopen_mcp_enhanced-1.0.1-py3-none-any.whl
    可选：python -m pip install pythonnet（get_class 显示继承链）。
 2. 选择嵌入后端：
    - 远程（推荐，不下载模型）：需要 OpenAI 兼容服务。把以下变量写入 MCP 配置的 env，
@@ -152,7 +152,7 @@ nxopen-mcp-enhanced/
 本包未发布到 PyPI，wheel 挂在 GitHub Release：
 
 ```bash
-python -m pip install https://github.com/EVOL233awa/nxopen-mcp-enhanced/releases/download/v1.0.0/nxopen_mcp_enhanced-1.0.0-py3-none-any.whl
+python -m pip install https://github.com/EVOL233awa/nxopen-mcp-enhanced/releases/download/v1.0.1/nxopen_mcp_enhanced-1.0.1-py3-none-any.whl
 ```
 
 可选依赖：
