@@ -126,6 +126,8 @@ nxopen-mcp-enhanced/
      NXOPEN_MCP_RERANK_URL=https://api.siliconflow.cn/v1/rerank
      NXOPEN_MCP_RERANK_MODEL=BAAI/bge-reranker-v2-m3
      NXOPEN_MCP_RERANK_API_KEY=<同 API key>
+   - Ollama：NXOPEN_MCP_EMBEDDER=ollama，地址/模型/批大小用
+     NXOPEN_MCP_OLLAMA_URL / _MODEL / _BATCH（默认 127.0.0.1:11434、bge-m3、128）。
    - 本地（离线）：python -m pip install FlagEmbedding，首次下载约 2 GB。
 3. 建索引：
    nxopen-mcp-enhanced index --nx-path <NX 安装根>
@@ -228,6 +230,9 @@ nxopen-mcp-enhanced index --nx-path "D:\Siemens\NX12.0"
 | `NXOPEN_MCP_EMBED_URL` | 远程嵌入 base URL | `http://127.0.0.1:11436` |
 | `NXOPEN_MCP_EMBED_MODEL` | 远程嵌入模型名 | `bge-m3` |
 | `NXOPEN_MCP_EMBED_API_KEY` | 远程嵌入 bearer token | 空 |
+| `NXOPEN_MCP_OLLAMA_URL` | Ollama 地址；`remote` 模式未设 `EMBED_URL` 时作为回退 | `http://127.0.0.1:11434` |
+| `NXOPEN_MCP_OLLAMA_MODEL` | Ollama 模型名；`remote` 模式未设 `EMBED_MODEL` 时作为回退 | `bge-m3` |
+| `NXOPEN_MCP_OLLAMA_BATCH` | 嵌入批大小，Ollama 与远程模式共用 | `128` |
 | `NXOPEN_MCP_RERANK` | 设为 `1` / `true` / `on` 开启重排 | 关闭 |
 | `NXOPEN_MCP_RERANK_URL` | 重排端点 | `http://127.0.0.1:8000/v1/rerank` |
 | `NXOPEN_MCP_RERANK_MODEL` | 重排模型名；空则不发送 `model` | 空 |

@@ -13,8 +13,9 @@ def test_index_with_bad_path_fails_helpfully(tmp_path):
 
 
 def test_index_with_fake_embedder(tmp_path, monkeypatch):
-    # 用環境變數讓 CLI 換成 fake embedder,避免測試下載 BGE-M3
-    monkeypatch.setenv("NXOPEN_MCP_FAKE_EMBEDDER", "1")
+    # CLI test only: inject the fake embedder through the factory hook so no
+    # model is downloaded. Production code has no knowledge of tests.fakes.
+    monkeypatch.setenv("NXOPEN_MCP_EMBEDDER_FACTORY", "tests.fakes:fake_factory")
     # fixture 目錄裡的 sample_doc.xml 改名規則不符,放一份符合的
     (tmp_path / "NXOpen.xml").write_bytes(
         (FIXTURE_DIR / "sample_doc.xml").read_bytes())
@@ -26,7 +27,7 @@ def test_index_with_fake_embedder(tmp_path, monkeypatch):
 
 
 def test_index_with_workers_option(tmp_path, monkeypatch):
-    monkeypatch.setenv("NXOPEN_MCP_FAKE_EMBEDDER", "1")
+    monkeypatch.setenv("NXOPEN_MCP_EMBEDDER_FACTORY", "tests.fakes:fake_factory")
     (tmp_path / "NXOpen.xml").write_bytes(
         (FIXTURE_DIR / "sample_doc.xml").read_bytes())
     db = tmp_path / "index.db"
@@ -46,20 +47,13 @@ def test_serve_without_index_gives_guidance(tmp_path):
     assert "nxopen-mcp-enhanced index" in result.output  # 指引先跑 index
 
 
-def test_fake_embedder_hook_missing_module_fails_helpfully(tmp_path, monkeypatch):
-    monkeypatch.setenv("NXOPEN_MCP_FAKE_EMBEDDER", "1")
-    import builtins
-    real_import = builtins.__import__
-    def block_tests_fakes(name, *a, **k):
-        if name == "tests.fakes":
-            raise ImportError("No module named 'tests'")
-        return real_import(name, *a, **k)
-    monkeypatch.setattr(builtins, "__import__", block_tests_fakes)
+def test_embedder_factory_missing_module_fails_helpfully(tmp_path, monkeypatch):
+    monkeypatch.setenv("NXOPEN_MCP_EMBEDDER_FACTORY", "no_such_module_xyz:factory")
     (tmp_path / "NXOpen.xml").write_text("<doc><members/></doc>")
     result = runner.invoke(app, ["index", "--nx-path", str(tmp_path),
                                  "--db", str(tmp_path / "i.db")])
     assert result.exit_code == 1
-    assert "NXOPEN_MCP_FAKE_EMBEDDER" in result.output
+    assert "NXOPEN_MCP_EMBEDDER_FACTORY" in result.output
 
 
 def test_serve_rejects_wrong_schema_version(tmp_path):

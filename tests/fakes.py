@@ -15,3 +15,8 @@ class FakeEmbedder:
             dense[i] = v / (np.linalg.norm(v) or 1.0)
             sparse.append({tok.lower(): 1.0 for tok in t.split()[:8]})
         return dense, sparse
+
+
+def fake_factory() -> FakeEmbedder:
+    """Module-level factory so CLI tests can inject it by import path."""
+    return FakeEmbedder()

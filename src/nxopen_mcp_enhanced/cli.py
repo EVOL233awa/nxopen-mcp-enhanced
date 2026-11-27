@@ -12,15 +12,18 @@ DEFAULT_DB = Path.home() / ".nxopen-mcp-enhanced" / "index.db"
 
 
 def _make_embedder():
-    if os.environ.get("NXOPEN_MCP_FAKE_EMBEDDER"):
+    spec = os.environ.get("NXOPEN_MCP_EMBEDDER_FACTORY", "")
+    if spec:
+        import importlib
+
+        module_name, _, attr = spec.partition(":")
         try:
-            from tests.fakes import FakeEmbedder  # test hook only
-            return FakeEmbedder()
-        except ImportError:
-            typer.echo("error: NXOPEN_MCP_FAKE_EMBEDDER is a dev-only hook; "
-                       "it requires the tests/ module. Unset the variable or "
-                       "use the installed source distribution.")
+            factory = getattr(importlib.import_module(module_name), attr)
+        except (ImportError, AttributeError) as exc:
+            typer.echo(f"error: NXOPEN_MCP_EMBEDDER_FACTORY={spec}: {exc}",
+                       err=True)
             raise typer.Exit(1)
+        return factory()
     from nxopen_mcp_enhanced.indexer.embedder import (
         BGEM3Embedder,
         LlamaEmbedder,
