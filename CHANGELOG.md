@@ -4,6 +4,18 @@
 
 格式遵循 [Keep a Changelog 2.0.0](https://keepachangelog.com/zh-CN/2.0.0/)，版本号遵循 [Semantic Versioning 2.0.0](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+
+- 文档：补 `NXOPEN_MCP_OLLAMA_URL`、`NXOPEN_MCP_OLLAMA_MODEL`、`NXOPEN_MCP_OLLAMA_BATCH` 的说明。
+- 内部：嵌入后端支持 `NXOPEN_MCP_EMBEDDER_FACTORY` 注入，测试钩子移出生产入口。
+- 许可：`LICENSE` 版权行补仓库地址，新增 `NOTICE` 与 `TRADEMARK.md`（MIT 条款不变）。
+
+### Fixed
+
+- 依赖 `typer` 下限提到 0.16，避免与 click 8.2 及以上组合时 CLI 报 `unexpected extra argument`。
+
 ## [1.0.0] - 2026-11-21
 
 基于上游 0.2.0 的首个增强版本。
