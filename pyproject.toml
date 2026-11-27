@@ -19,7 +19,7 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.2,<2",
-    "typer>=0.12",
+    "typer>=0.16",
     "sqlite-vec>=0.1.6",
     "numpy>=1.26",
 ]
